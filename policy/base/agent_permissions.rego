@@ -103,7 +103,6 @@ sensitive_prefixes := [
 	"/root/",
 	"/home",
 	"/run/atomic",   # daemon sockets - agents cannot talk to the daemon directly
-	"/var/lib/atomic/agents",  # other agents' workspaces
 	"/boot",
 	"/usr/lib/systemd",
 	"/usr/bin/atomicagentd",
