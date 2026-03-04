@@ -2,12 +2,17 @@
 
 Atomic OS is a free, open-source OS platform for safely running AI agents in infrastructure.
 
-It is built on [Project Hummingbird](https://github.com/containers/bootc) (bootable container images) and consists of three layered components:
+It combines two complementary Red Hat initiatives:
+
+- **[Project Hummingbird](https://www.redhat.com/en/blog/red-hat-hummingbird)** — Red Hat's zero-CVE minimal container image project. Provides the hardened, minimal base images that Atomic Linux builds on. Think of it as Red Hat's answer to Alpine/Wolfi: small attack surface, no unnecessary packages, security-first.
+- **[bootc](https://github.com/containers/bootc)** — Bootable Containers project. Treats the entire OS as an OCI image that can be deployed, updated, and rolled back like a container pull.
+
+Atomic OS uses Hummingbird images as the trusted, minimal content layer and `bootc` as the deployment/update mechanism.
 
 | Component | Description |
 |---|---|
-| **Atomic Linux** | Free, minimal, bootable container-optimized OS (base layer) |
-| **Atomic Images** | Bootable OCI images built with `bootc` (formerly Hummingbird) |
+| **Atomic Linux** | Free, minimal, bootable OS built from Hummingbird base images, managed via `bootc` |
+| **Atomic Images** | The OCI images produced by this project — bootable via `bootc`, minimal via Hummingbird principles |
 | **Agentic OS** | AI agent safety runtime: sandboxing, policy engine, and threat detection |
 
 The core motivation: running an AI agent in your infrastructure without safety guardrails is dangerous. The agent will install software, reach unexpected network destinations, and access files outside its intended scope. Agentic OS enforces these boundaries at the OS level.
@@ -23,8 +28,8 @@ The core motivation: running an AI agent in your infrastructure without safety g
 │               ATOMIC LINUX (base)                   │
 │  fedora-bootc  |  kernel LTS  |  SELinux  |  audit  │
 ├─────────────────────────────────────────────────────┤
-│               BOOTC (Project Hummingbird)           │
-│  bootc  |  ostree  |  composefs  |  OCI format      │
+│    BOOTC (OS deployment) + HUMMINGBIRD (content)    │
+│  bootc  |  ostree  |  composefs  |  zero-CVE images │
 └─────────────────────────────────────────────────────┘
 ```
 

@@ -1,10 +1,20 @@
 # Atomic Linux - Base Image
-# Builds a minimal, hardened, bootable OCI image based on Fedora bootc.
-# This is the foundation for all Atomic OS images.
+# Builds a minimal, hardened, bootable OCI image.
+#
+# Foundation stack:
+#   - Project Hummingbird: provides the zero-CVE minimal content philosophy.
+#     When Red Hat publishes official Hummingbird base images they will replace
+#     fedora-bootc as the FROM image here, giving us hardened/minimal content.
+#   - bootc: handles OS deployment, atomic updates, and rollback semantics.
+#     The image is consumed by `bootc switch`, `bootc upgrade`, and
+#     bootc-image-builder for disk image generation.
 #
 # Build: podman build -f images/atomic-base/Containerfile -t atomic-linux:latest .
 # Test:  bootc-image-builder --type qcow2 atomic-linux:latest
 
+# TODO: Replace with official Red Hat Hummingbird base image when published.
+# Hummingbird base images will provide zero-CVE, minimal content out of the box.
+# Tracking: https://www.redhat.com/en/blog/red-hat-hummingbird
 FROM quay.io/fedora/fedora-bootc:42
 
 LABEL org.opencontainers.image.title="Atomic Linux"

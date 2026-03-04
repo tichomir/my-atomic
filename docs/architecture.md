@@ -90,9 +90,16 @@ journalctl -t atomic-audit -o json | jq 'select(.agent_id == "my-agent")'
 journalctl -t atomic-audit -o json | jq 'select(.severity == "CRITICAL")'
 ```
 
-## OS Immutability (bootc)
+## OS Immutability (bootc + Hummingbird)
 
-Atomic Linux uses `bootc` (formerly Project Hummingbird) for OS management:
+Atomic Linux uses two complementary Red Hat projects for OS management:
+
+- **bootc** handles deployment, updates, and rollback — the OS is an OCI image
+- **Project Hummingbird** provides the minimal, zero-CVE base image content that Atomic Linux builds from
+
+Together they give Atomic OS both a minimal attack surface (Hummingbird) and atomic update semantics (bootc).
+
+### bootc mechanics
 
 - `/usr` is mounted read-only via composefs
 - OS updates are OCI image pulls: `bootc upgrade`
