@@ -239,10 +239,10 @@ func (m *Manager) ListAgents() []*RuntimeAgent {
 }
 
 // ExecStart returns the agent's executable path.
-// The actual exec path is stored in the AgentRecord context.
+// The actual exec path is the first entry in AllowedBinaries for this agent.
 func (ra *RuntimeAgent) ExecStart() string {
-	if path, ok := ra.AgentRecord.AllowedBinaries[0:1]; ok && len(path) > 0 {
-		return path[0]
+	if len(ra.AgentRecord.AllowedBinaries) > 0 {
+		return ra.AgentRecord.AllowedBinaries[0]
 	}
 	return "/bin/false" // safe default - agent will fail to start
 }

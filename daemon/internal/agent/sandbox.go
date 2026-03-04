@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	godbus "github.com/godbus/dbus/v5"
+
 	"github.com/coreos/go-systemd/v22/dbus"
 )
 
@@ -69,27 +71,22 @@ func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) erro
 	unitName := SystemdUnitName(cfg.AgentID)
 
 	// Build systemd unit properties for the transient unit.
-	// These apply the hardening from the template unit plus profile-specific limits.
+	// Property.Value must be a godbus.Variant (github.com/godbus/dbus/v5).
 	properties := []dbus.Property{
 		dbus.PropDescription(fmt.Sprintf("Atomic Agent: %s [%s]", cfg.AgentID, cfg.Profile)),
 		dbus.PropExecStart([]string{cfg.ExecStart}, false),
-		// Inherit hardening from the template but apply profile resource limits
-		{Name: "MemoryMax", Value: dbusVariant(uint64(cfg.MemoryMaxMB) * 1024 * 1024)},
-		{Name: "CPUQuotaPerSecUSec", Value: dbusVariant(uint64(cfg.CPUQuotaPct) * 10000)},
-		{Name: "TasksMax", Value: dbusVariant(uint64(cfg.TasksMax))},
-		// Workspace bind mount
-		{Name: "BindPaths", Value: dbusVariant([]string{cfg.WorkspacePath})},
-		// Environment
-		{Name: "Environment", Value: dbusVariant([]string{
+		{Name: "MemoryMax", Value: makeVariant(uint64(cfg.MemoryMaxMB) * 1024 * 1024)},
+		{Name: "CPUQuotaPerSecUSec", Value: makeVariant(uint64(cfg.CPUQuotaPct) * 10000)},
+		{Name: "TasksMax", Value: makeVariant(uint64(cfg.TasksMax))},
+		{Name: "BindPaths", Value: makeVariant([]string{cfg.WorkspacePath})},
+		{Name: "Environment", Value: makeVariant([]string{
 			fmt.Sprintf("ATOMIC_AGENT_ID=%s", cfg.AgentID),
 			fmt.Sprintf("ATOMIC_AGENT_PROFILE=%s", cfg.Profile),
 			"ATOMIC_POLICY_SOCKET=/run/atomic/policy.sock",
 			"ATOMIC_AUDIT_SOCKET=/run/atomic/audit.sock",
 		})},
-		// Network restriction for minimal profile
-		{Name: "PrivateNetwork", Value: dbusVariant(!cfg.AllowNetwork)},
-		// Dynamic user for ephemeral UID isolation
-		{Name: "DynamicUser", Value: dbusVariant(true)},
+		{Name: "PrivateNetwork", Value: makeVariant(!cfg.AllowNetwork)},
+		{Name: "DynamicUser", Value: makeVariant(true)},
 	}
 
 	ch := make(chan string)
@@ -98,7 +95,6 @@ func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) erro
 		return fmt.Errorf("starting transient unit %s: %w", unitName, err)
 	}
 
-	// Wait for the job to complete
 	result := <-ch
 	if result != "done" {
 		return fmt.Errorf("systemd job for %s finished with status: %s", unitName, result)
@@ -122,7 +118,8 @@ func (m *SandboxManager) StopAgent(ctx context.Context, agentID string) error {
 // KillAgent immediately sends SIGKILL to an agent.
 func (m *SandboxManager) KillAgent(agentID string) error {
 	unitName := SystemdUnitName(agentID)
-	return m.conn.KillUnitContext(context.Background(), unitName, int32(9))
+	// Use KillUnitWithTarget (returns error) instead of deprecated KillUnitContext (returns nothing).
+	return m.conn.KillUnitWithTarget(context.Background(), unitName, dbus.All, 9)
 }
 
 // AgentStatus returns the current systemd unit status for an agent.
@@ -144,7 +141,8 @@ func (m *SandboxManager) Close() {
 	m.conn.Close()
 }
 
-// dbusVariant wraps a value in the dbus.Variant type required by go-systemd.
-func dbusVariant(v interface{}) dbus.Variant {
-	return dbus.MakeVariant(v)
+// makeVariant wraps a value in godbus.Variant, which is the type required by
+// go-systemd's dbus.Property.Value field.
+func makeVariant(v interface{}) godbus.Variant {
+	return godbus.MakeVariant(v)
 }
