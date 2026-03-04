@@ -1,0 +1,225 @@
+# Atomic OS - AI Agent Falco Rules
+# Runtime threat detection rules specific to AI agents.
+#
+# These rules detect common AI agent safety violations:
+#   - Credential access (prompt injection leading to secret theft)
+#   - Unexpected shell spawning (prompt injection executing arbitrary commands)
+#   - Lateral movement (agent trying to reach other systems)
+#   - Sandbox escape attempts
+#   - Resource abuse
+
+# --- Agent detection macros ---
+
+- macro: is_atomic_agent
+  condition: >
+    (proc.env["ATOMIC_AGENT_ID"] exists and
+     proc.env["ATOMIC_AGENT_ID"] != "")
+
+- macro: agent_id
+  condition: proc.env["ATOMIC_AGENT_ID"]
+
+- macro: in_agent_workspace
+  condition: >
+    fd.name startswith /var/lib/atomic/agents/
+
+# --- Credential access rules ---
+
+- rule: AI Agent Credential File Access
+  desc: >
+    An AI agent is attempting to read credential or key files outside its workspace.
+    This is a high-confidence indicator of prompt injection leading to credential theft.
+  condition: >
+    is_atomic_agent and
+    open_read and
+    (fd.name startswith /etc/shadow or
+     fd.name startswith /etc/passwd or
+     fd.name startswith /root/.ssh or
+     fd.name startswith /home and fd.name contains "/.ssh/" or
+     fd.name startswith /home and fd.name contains "/.aws/" or
+     fd.name startswith /home and fd.name contains "/.gcloud/" or
+     fd.name contains ".pem" or
+     fd.name contains ".key" or
+     fd.name contains "id_rsa" or
+     fd.name contains "id_ed25519" or
+     fd.name contains ".kubeconfig" or
+     fd.name contains "kubeconfig") and
+    not in_agent_workspace
+  output: >
+    AI agent credential access attempt
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     file=%fd.name pid=%proc.pid
+     cmdline=%proc.cmdline user=%user.name)
+  priority: CRITICAL
+  tags: [atomic, agent, credential-access, prompt-injection]
+
+# Rule: Agent reading other agents' workspaces
+- rule: AI Agent Cross-Workspace Access
+  desc: An AI agent is attempting to read another agent's workspace
+  condition: >
+    is_atomic_agent and
+    open_read and
+    in_agent_workspace and
+    not fd.name startswith concat("/var/lib/atomic/agents/", proc.env["ATOMIC_AGENT_ID"])
+  output: >
+    AI agent cross-workspace access attempt
+    (attacker_agent=%proc.env[ATOMIC_AGENT_ID]
+     target_path=%fd.name pid=%proc.pid)
+  priority: CRITICAL
+  tags: [atomic, agent, isolation, lateral-movement]
+
+# --- Shell spawning rules ---
+
+- list: shell_binaries
+  items: [bash, sh, dash, zsh, fish, ksh, tcsh, ash]
+
+- macro: shell_procs
+  condition: proc.name in (shell_binaries)
+
+- rule: AI Agent Unexpected Shell Spawn
+  desc: >
+    An AI agent spawned an interactive shell.
+    This is a strong indicator of prompt injection where the attacker
+    has convinced the agent to execute arbitrary shell commands.
+  condition: >
+    is_atomic_agent and
+    spawned_process and
+    shell_procs and
+    proc.tty != 0
+  output: >
+    AI agent spawned interactive shell - possible prompt injection
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     shell=%proc.name parent=%proc.pname
+     pid=%proc.pid tty=%proc.tty cmdline=%proc.cmdline)
+  priority: CRITICAL
+  tags: [atomic, agent, execution, prompt-injection]
+
+# Rule: Agent spawning unexpected binary
+- list: expected_agent_binaries
+  items: [python3, python, node, bash, sh, curl, git, env, jq, yq]
+
+- rule: AI Agent Unexpected Process Spawn
+  desc: An AI agent spawned a process not in the expected binary list
+  condition: >
+    is_atomic_agent and
+    spawned_process and
+    not proc.name in (expected_agent_binaries) and
+    not proc.name startswith "python"
+  output: >
+    AI agent spawned unexpected process
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     process=%proc.name parent=%proc.pname
+     cmdline=%proc.cmdline)
+  priority: WARNING
+  tags: [atomic, agent, execution]
+
+# --- Network rules ---
+
+- macro: cloud_metadata_ip
+  condition: >
+    (fd.rip = "169.254.169.254" or
+     fd.rip = "169.254.170.2" or
+     fd.rip = "fd00:ec2::254")
+
+# Rule: Agent reaching cloud metadata service (SSRF)
+- rule: AI Agent Cloud Metadata Access
+  desc: >
+    An AI agent is attempting to connect to the cloud metadata service.
+    This is a critical SSRF/prompt injection attack that could expose
+    instance credentials (AWS IAM roles, GCP service accounts, etc.)
+  condition: >
+    is_atomic_agent and
+    (evt.type = connect or evt.type = sendto) and
+    cloud_metadata_ip
+  output: >
+    AI agent cloud metadata SSRF attempt - CRITICAL security event
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     destination=%fd.rip:%fd.rport pid=%proc.pid
+     cmdline=%proc.cmdline)
+  priority: CRITICAL
+  tags: [atomic, agent, network, ssrf, credential-access]
+
+# Rule: Agent making unexpected outbound connection
+- rule: AI Agent Unexpected Outbound Connection
+  desc: An AI agent is connecting to a network destination
+  condition: >
+    is_atomic_agent and
+    evt.type = connect and
+    fd.typechar = '4' and
+    not cloud_metadata_ip
+  output: >
+    AI agent outbound network connection
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     destination=%fd.rip:%fd.rport pid=%proc.pid
+     cmdline=%proc.cmdline)
+  priority: NOTICE
+  tags: [atomic, agent, network]
+
+# --- Sandbox escape rules ---
+
+# Rule: Agent attempting to access /proc of another process
+- rule: AI Agent Proc Filesystem Escape
+  desc: An AI agent is reading /proc entries for processes other than itself
+  condition: >
+    is_atomic_agent and
+    open_read and
+    fd.name startswith /proc/ and
+    not fd.name startswith /proc/self and
+    not fd.name startswith concat("/proc/", proc.pid)
+  output: >
+    AI agent /proc filesystem escape attempt
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     path=%fd.name pid=%proc.pid)
+  priority: WARNING
+  tags: [atomic, agent, sandbox-escape]
+
+# Rule: Agent using ptrace (attempting to inspect/modify other processes)
+- rule: AI Agent Ptrace Usage
+  desc: An AI agent is attempting to use ptrace to inspect or modify processes
+  condition: >
+    is_atomic_agent and
+    evt.type = ptrace and
+    evt.arg.request != PTRACE_TRACEME
+  output: >
+    AI agent ptrace attempt
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     target_pid=%evt.arg.pid pid=%proc.pid)
+  priority: CRITICAL
+  tags: [atomic, agent, sandbox-escape]
+
+# --- Resource abuse rules ---
+
+# Rule: Agent creating too many processes (fork bomb pattern)
+- rule: AI Agent Possible Fork Bomb
+  desc: An AI agent is spawning an unusually large number of processes
+  condition: >
+    is_atomic_agent and
+    spawned_process and
+    proc.count > 200
+  output: >
+    AI agent possible fork bomb (agent_id=%proc.env[ATOMIC_AGENT_ID]
+    process_count=%proc.count pid=%proc.pid)
+  priority: ERROR
+  tags: [atomic, agent, resource-abuse]
+
+# --- Package installation rules ---
+
+- list: package_managers
+  items: [dnf, yum, rpm, apt, apt-get, pip, pip3, npm, yarn, gem, cargo]
+
+# Rule: Agent attempting to install system packages
+- rule: AI Agent System Package Install
+  desc: >
+    An AI agent is attempting to install system packages.
+    This is the exact behavior from the meeting transcript (agent installing
+    image conversion tools without permission). Must be blocked.
+  condition: >
+    is_atomic_agent and
+    spawned_process and
+    proc.name in (package_managers)
+  output: >
+    AI agent attempted system package installation - THIS IS THE THING FROM THE DEMO
+    (agent_id=%proc.env[ATOMIC_AGENT_ID]
+     package_manager=%proc.name args=%proc.args
+     pid=%proc.pid)
+  priority: CRITICAL
+  tags: [atomic, agent, package-install, prompt-injection]

@@ -1,0 +1,87 @@
+# Atomic OS - Base Falco Rules
+# System-level rules for Atomic Linux (applied to all processes, not just agents).
+# These rules protect the OS itself from tampering.
+
+# --- Macros ---
+
+- macro: atomic_os_binaries
+  condition: >
+    proc.name in (atomicagentd, atomic-agent-ctl, falco, systemd)
+
+- macro: write_to_etc
+  condition: >
+    (evt.type in (open, openat, openat2) and
+     evt.is_open_write = true and
+     fd.typechar = 'f' and
+     fd.name startswith /etc)
+
+- macro: write_to_usr
+  condition: >
+    (evt.type in (open, openat, openat2) and
+     evt.is_open_write = true and
+     fd.typechar = 'f' and
+     (fd.name startswith /usr or fd.name startswith /bin or fd.name startswith /sbin))
+
+- macro: proc_is_new
+  condition: evt.type in (execve, execveat)
+
+# --- Rules ---
+
+# Rule: Modification of /etc (bootc makes /usr immutable; /etc is mutable but should be audited)
+- rule: Write to /etc on Atomic OS
+  desc: A process is writing to /etc which contains system configuration
+  condition: >
+    write_to_etc and
+    not proc.name in (cloud-init, rpm-ostree, bootc, atomic-agent-ctl)
+  output: >
+    Write to /etc detected (proc=%proc.name pid=%proc.pid
+    file=%fd.name cmdline=%proc.cmdline user=%user.name)
+  priority: WARNING
+  tags: [atomic, filesystem, configuration]
+
+# Rule: Modification of system binaries
+- rule: Write to system binary directories
+  desc: A process is attempting to modify system binaries
+  condition: write_to_usr
+  output: >
+    Write to system binary directory (proc=%proc.name pid=%proc.pid
+    file=%fd.name user=%user.name)
+  priority: ERROR
+  tags: [atomic, filesystem, integrity]
+
+# Rule: Unexpected privilege escalation
+- rule: Privilege escalation attempt
+  desc: A process is attempting to gain elevated privileges
+  condition: >
+    evt.type = setuid and
+    user.uid != 0 and
+    evt.rawres = 0 and
+    not proc.name in (sudo, su, dbus-daemon, polkit)
+  output: >
+    Privilege escalation attempt (proc=%proc.name pid=%proc.pid
+    old_uid=%user.uid new_uid=%evt.arg.uid)
+  priority: CRITICAL
+  tags: [atomic, privilege, escalation]
+
+# Rule: New kernel module loaded
+- rule: Kernel module load attempt
+  desc: Attempt to load a kernel module (blocked by lockdown=integrity kernel arg)
+  condition: evt.type = init_module or evt.type = finit_module
+  output: >
+    Kernel module load attempt (proc=%proc.name pid=%proc.pid
+    module=%evt.arg.name user=%user.name)
+  priority: CRITICAL
+  tags: [atomic, kernel, integrity]
+
+# Rule: atomicagentd binary replaced
+- rule: Atomic daemon binary modified
+  desc: The atomicagentd or atomic-agent-ctl binary is being modified
+  condition: >
+    (evt.type in (open, openat, openat2) and
+     evt.is_open_write = true and
+     fd.name in (/usr/bin/atomicagentd, /usr/bin/atomic-agent-ctl))
+  output: >
+    Atomic daemon binary modification attempt (proc=%proc.name
+    pid=%proc.pid file=%fd.name)
+  priority: CRITICAL
+  tags: [atomic, integrity, tampering]

@@ -1,0 +1,50 @@
+# Atomic Linux - Base Image
+# Builds a minimal, hardened, bootable OCI image based on Fedora bootc.
+# This is the foundation for all Atomic OS images.
+#
+# Build: podman build -f images/atomic-base/Containerfile -t atomic-linux:latest .
+# Test:  bootc-image-builder --type qcow2 atomic-linux:latest
+
+FROM quay.io/fedora/fedora-bootc:42
+
+LABEL org.opencontainers.image.title="Atomic Linux"
+LABEL org.opencontainers.image.description="Free, minimal, container-optimized bootable Linux"
+LABEL org.opencontainers.image.vendor="Atomic OS Project"
+LABEL org.opencontainers.image.source="https://github.com/tichomir/my-atomic"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL containers.bootc="1"
+
+# Install cloud-ready packages and remove unnecessary ones
+RUN dnf -y install \
+    cloud-init \
+    chrony \
+    tuned \
+    audit \
+    policycoreutils \
+    policycoreutils-python-utils \
+    selinux-policy-targeted \
+    && dnf -y remove \
+    NetworkManager-tui \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+# Enable cloud-init on boot
+RUN ln -s ../cloud-init.target \
+    /usr/lib/systemd/system/default.target.wants/cloud-init.target || true
+
+# Enable audit daemon
+RUN systemctl enable auditd.service || true
+
+# Enable chrony for time sync
+RUN systemctl enable chronyd.service || true
+
+# Copy OS-layer configuration into the image
+COPY os/usr /usr
+COPY os/etc /etc
+
+# Validate that this is a valid bootc image
+RUN bootc container lint
+
+# Image version label (overridden by CI)
+ARG BUILD_VERSION=dev
+LABEL org.opencontainers.image.version="${BUILD_VERSION}"

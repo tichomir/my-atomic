@@ -1,0 +1,16 @@
+# Kernel arguments for Atomic Linux
+# Applied at boot via bootc kargs mechanism.
+# Enables audit subsystem, hardens LSM stack, and sets console output.
+
+kargs = [
+  # Serial console for cloud/VM use
+  "console=ttyS0",
+  # Enable kernel audit subsystem (required for compliance)
+  "audit=1",
+  # LSM ordering: landlock first for file restriction, then SELinux
+  "lsm=landlock,lockdown,yama,integrity,selinux,bpf",
+  # Suppress non-critical boot messages
+  "quiet",
+  # Enable kernel lockdown in integrity mode (blocks /dev/mem, unsigned modules)
+  "lockdown=integrity"
+]

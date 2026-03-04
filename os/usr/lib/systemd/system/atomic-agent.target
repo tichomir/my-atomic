@@ -1,0 +1,5 @@
+[Unit]
+Description=Atomic Agent Runtime Target
+Documentation=https://github.com/tichomir/my-atomic/docs/architecture.md
+After=atomicagentd.service
+Requires=atomicagentd.service

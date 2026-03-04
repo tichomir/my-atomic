@@ -1,0 +1,41 @@
+# Atomic OS top-level configuration
+# This file is the operator-overridable config in /etc (bootc semantics).
+# The base defaults live in /usr/share/atomic/defaults.toml (read-only).
+
+[os]
+# Product name for identification
+name = "Atomic OS"
+variant = "base"
+
+[agents]
+# Default policy profile applied to newly registered agents
+default_profile = "minimal"
+# Directory where agent workspaces are provisioned
+workspace_root = "/var/lib/atomic/agents"
+# Socket path for atomicagentd API
+api_socket = "/run/atomic/api.sock"
+# Maximum number of concurrently running agents (0 = unlimited)
+max_concurrent_agents = 0
+
+[audit]
+# Write agent audit events to systemd journal
+journal_enabled = true
+# Journal identifier for audit events
+journal_identifier = "atomic-audit"
+# Also write to a structured log file
+file_enabled = false
+file_path = "/var/log/atomic/audit.jsonl"
+
+[policy]
+# Directory for operator-provided policy overrides (/etc is mutable in bootc)
+policy_dir = "/etc/atomic/policy"
+# Built-in policy directory (/usr is immutable in bootc)
+builtin_policy_dir = "/usr/share/atomic/policy"
+
+[runtime]
+# Enable Falco integration for runtime threat detection
+falco_enabled = true
+# Falco webhook URL (atomicagentd listens for Falco events)
+falco_webhook_url = "http://127.0.0.1:9765/falco"
+# Auto-kill agent on CRITICAL Falco rule match
+auto_kill_on_critical = true

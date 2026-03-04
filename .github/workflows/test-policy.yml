@@ -1,0 +1,37 @@
+name: Policy Tests
+
+on:
+  push:
+    paths:
+      - 'policy/**'
+  pull_request:
+    paths:
+      - 'policy/**'
+
+jobs:
+  opa-test:
+    name: OPA Policy Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: Run tests
+        run: |
+          echo "Running OPA policy unit tests..."
+          opa test policy/ -v --format pretty
+
+      - name: Check coverage
+        run: |
+          echo "Checking policy test coverage..."
+          opa test policy/ -v --coverage | grep -E "coverage|PASS|FAIL"
+
+      - name: Format check
+        run: |
+          echo "Checking Rego formatting..."
+          opa fmt --diff policy/ && echo "All policies correctly formatted" || \
+            (echo "Policy formatting issues found. Run: opa fmt --write policy/" && exit 1)

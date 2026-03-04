@@ -1,0 +1,60 @@
+[Unit]
+Description=Atomic Agent Daemon
+Documentation=https://github.com/tichomir/my-atomic/docs/architecture.md
+After=network.target auditd.service
+Wants=atomic-policy.service
+Before=atomic-agent.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+
+# Run as dedicated system user
+User=atomic-daemon
+Group=atomic-daemon
+
+# Runtime directories (created automatically by systemd)
+RuntimeDirectory=atomic
+RuntimeDirectoryMode=0750
+StateDirectory=atomic
+StateDirectoryMode=0750
+LogsDirectory=atomic
+LogsDirectoryMode=0750
+CacheDirectory=atomic
+CacheDirectoryMode=0750
+
+# Hardening: the daemon itself is tightly sandboxed
+CapabilityBoundingSet=CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_KILL
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=no
+ReadWritePaths=/var/lib/atomic /var/log/atomic /run/atomic
+ReadOnlyPaths=/etc/atomic /usr/share/atomic
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallFilter=@system-service @privileged
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+
+# Resource limits
+MemoryMax=256M
+TasksMax=128
+
+ExecStart=/usr/bin/atomicagentd --config /etc/atomic/config.toml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=60s
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

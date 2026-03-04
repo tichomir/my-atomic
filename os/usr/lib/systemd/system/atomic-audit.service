@@ -1,0 +1,30 @@
+[Unit]
+Description=Atomic Audit Log Service
+Documentation=https://github.com/tichomir/my-atomic/docs/architecture.md
+After=systemd-journald.service
+PartOf=atomicagentd.service
+
+[Service]
+Type=simple
+
+# Read audit events from atomicagentd unix socket and forward to journal
+ExecStart=/usr/bin/atomic-agent-ctl audit forward \
+    --socket /run/atomic/audit.sock \
+    --journal-identifier atomic-audit
+
+User=atomic-daemon
+Group=atomic-daemon
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/etc/atomic
+RuntimeDirectory=atomic
+RuntimeDirectoryMode=0750
+
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

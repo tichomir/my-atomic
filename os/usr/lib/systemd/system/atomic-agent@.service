@@ -1,0 +1,74 @@
+# Atomic Agent Template Unit
+# Instantiated by atomicagentd for each registered AI agent.
+# Instance name = agent ID (e.g. atomic-agent@myagent.service)
+#
+# This unit is NOT enabled manually. atomicagentd manages it via
+# systemd D-Bus API (StartTransientUnit).
+# This template defines the baseline hardening applied to ALL agents.
+
+[Unit]
+Description=Atomic Agent: %i
+Documentation=https://github.com/tichomir/my-atomic/docs/agent-profiles.md
+After=atomicagentd.service
+PartOf=atomicagentd.service
+# Bind agent lifetime to the daemon
+BindsTo=atomicagentd.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+
+# Each agent gets an ephemeral unique UID - no persistent identity
+DynamicUser=yes
+
+# Full filesystem isolation
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateIPC=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+
+# No capabilities whatsoever
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=yes
+
+# Seccomp: only system-service syscalls allowed
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+# Memory safety
+MemoryDenyWriteExecute=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Resource limits (overridden per-profile by atomicagentd)
+MemoryMax=2G
+CPUQuota=200%
+TasksMax=256
+LimitNOFILE=1024
+LimitNPROC=128
+
+# Agent workspace bind-mount (set by atomicagentd at start time)
+# BindPaths=/var/lib/atomic/agents/%i/workspace
+# ReadOnlyPaths=/etc/atomic/policy
+
+# Required environment (set by atomicagentd)
+Environment=ATOMIC_AGENT_ID=%i
+Environment=ATOMIC_POLICY_SOCKET=/run/atomic/policy.sock
+Environment=ATOMIC_AUDIT_SOCKET=/run/atomic/audit.sock
+
+# ExecStart is set by atomicagentd when starting the transient unit
+# This template is never started directly.
+
+[Install]
+# Not installed - managed by atomicagentd

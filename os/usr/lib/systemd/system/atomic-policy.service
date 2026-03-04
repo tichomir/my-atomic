@@ -1,0 +1,26 @@
+[Unit]
+Description=Atomic Policy Engine
+Documentation=https://github.com/tichomir/my-atomic/docs/policy-reference.md
+After=local-fs.target
+Before=atomicagentd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Validate built-in policies on startup
+ExecStart=/usr/bin/atomic-agent-ctl policy validate --dir /usr/share/atomic/policy
+# Validate operator-override policies if present
+ExecStart=/usr/bin/atomic-agent-ctl policy validate --dir /etc/atomic/policy --allow-missing
+
+User=atomic-daemon
+Group=atomic-daemon
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/usr/share/atomic/policy /etc/atomic/policy
+
+[Install]
+WantedBy=multi-user.target

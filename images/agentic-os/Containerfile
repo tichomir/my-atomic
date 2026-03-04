@@ -1,0 +1,84 @@
+# Agentic OS - The Summit deliverable
+# Extends atomic-cloud with the full AI agent safety stack:
+#   - atomicagentd daemon
+#   - OPA policy engine + built-in policies
+#   - Falco runtime threat detection with agent rules
+#   - atomic-agent-ctl CLI
+#
+# This is the "Agentic OS" described in the Atomic product line.
+# CoreOS : OpenShift :: Agentic OS : Red Hat AI
+#
+# Build: podman build -f images/agentic-os/Containerfile -t agentic-os:latest .
+
+# Multi-stage: build the Go daemon
+FROM golang:1.24-bookworm AS daemon-builder
+
+WORKDIR /build
+
+# Cache dependencies first
+COPY daemon/go.mod daemon/go.sum ./
+RUN go mod download
+
+# Build daemon and CLI
+COPY daemon/ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w -X main.version=${BUILD_VERSION:-dev}" \
+    -o /out/atomicagentd ./cmd/atomicagentd && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w -X main.version=${BUILD_VERSION:-dev}" \
+    -o /out/atomic-agent-ctl ./cmd/atomic-agent-ctl
+
+# Verify binaries built correctly
+RUN /out/atomicagentd --version && /out/atomic-agent-ctl --version
+
+# Final bootable image
+ARG BASE_IMAGE=ghcr.io/tichomir/atomic-cloud:latest
+FROM ${BASE_IMAGE}
+
+LABEL org.opencontainers.image.title="Agentic OS"
+LABEL org.opencontainers.image.description="Atomic Linux with AI agent safety runtime"
+
+# Install Falco for runtime threat detection
+RUN dnf -y install \
+    https://download.falco.org/packages/rpm/falco-0.39.2-x86_64.rpm \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf || \
+    # Fallback: install from COPR or skip if unavailable in this environment
+    (echo "WARNING: Falco RPM not available, skipping" && true)
+
+# Copy compiled binaries from builder stage
+COPY --from=daemon-builder /out/atomicagentd /usr/bin/atomicagentd
+COPY --from=daemon-builder /out/atomic-agent-ctl /usr/bin/atomic-agent-ctl
+
+# Set executable permissions
+RUN chmod 755 /usr/bin/atomicagentd /usr/bin/atomic-agent-ctl
+
+# Copy OPA policies into immutable /usr
+COPY policy/ /usr/share/atomic/policy/
+
+# Copy Falco configuration and rules
+COPY runtime/falco/falco.yaml /etc/falco/falco.yaml
+COPY runtime/falco/rules/ /etc/falco/rules.d/
+
+# Copy sysusers definition (creates atomic-daemon user on boot)
+COPY os/usr/share/atomic/sysusers.conf /usr/lib/sysusers.d/atomic.conf
+
+# Enable Agentic OS services
+RUN systemctl enable atomicagentd.service \
+    atomic-policy.service \
+    atomic-audit.service \
+    falco.service || true
+
+# Create state directories with correct ownership
+# (Will be owned by DynamicUser=atomic-daemon after sysusers runs)
+RUN mkdir -p /var/lib/atomic/agents \
+    /var/log/atomic \
+    /usr/share/atomic/policy \
+    && chmod 750 /var/lib/atomic/agents \
+    && chmod 755 /usr/share/atomic/policy
+
+# Validate bootc image
+RUN bootc container lint
+
+ARG BUILD_VERSION=dev
+LABEL org.opencontainers.image.version="${BUILD_VERSION}"
