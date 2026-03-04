@@ -21,6 +21,8 @@ RUN go mod download
 
 # Build daemon and CLI
 COPY daemon/ ./
+# Ensure go.sum is consistent with go.mod (handles indirect dep drift)
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-s -w -X main.version=${BUILD_VERSION:-dev}" \
     -o /out/atomicagentd ./cmd/atomicagentd && \

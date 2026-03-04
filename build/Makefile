@@ -35,7 +35,11 @@ all: test image-base image-agentic
 
 # --- Go daemon ---
 
-build-daemon:
+tidy:
+	@echo "==> Tidying Go modules..."
+	cd $(DAEMON_DIR) && $(GO) mod tidy
+
+build-daemon: tidy
 	@echo "==> Building atomicagentd and atomic-agent-ctl..."
 	cd $(DAEMON_DIR) && $(GO) build \
 		-ldflags="-s -w -X main.version=$(VERSION)" \
