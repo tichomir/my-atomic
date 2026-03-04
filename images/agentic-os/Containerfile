@@ -32,9 +32,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 RUN /out/atomicagentd --version && /out/atomic-agent-ctl --version
 
 # Final bootable image
-# The Makefile overrides this with --from $(ATOMIC_CLOUD_IMAGE) at build time.
-# The tag here is the fallback when building manually without the Makefile.
-FROM ghcr.io/tichomir/atomic-cloud:latest
+# ARG immediately before FROM makes it available for this FROM only.
+# Passed via --build-arg BASE_IMAGE=<tag> by the Makefile.
+ARG BASE_IMAGE=ghcr.io/tichomir/atomic-cloud:latest
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.title="Agentic OS"
 LABEL org.opencontainers.image.description="Atomic Linux with AI agent safety runtime"

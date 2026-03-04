@@ -97,7 +97,7 @@ image-agentic: image-base image-cloud
 		--file $(IMAGES_DIR)/agentic-os/Containerfile \
 		--tag $(AGENTIC_OS_IMAGE) \
 		--build-arg BUILD_VERSION=$(VERSION) \
-		--from $(ATOMIC_CLOUD_IMAGE) \
+		--build-arg BASE_IMAGE=$(ATOMIC_CLOUD_IMAGE) \
 		..
 	@echo "==> Built $(AGENTIC_OS_IMAGE)"
 
