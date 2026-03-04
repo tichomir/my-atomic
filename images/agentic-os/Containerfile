@@ -10,6 +10,10 @@
 #
 # Build: podman build -f images/agentic-os/Containerfile -t agentic-os:latest .
 
+# ARG declarations before the first FROM are visible to all FROM lines
+ARG BASE_IMAGE=ghcr.io/tichomir/atomic-cloud:latest
+ARG BUILD_VERSION=dev
+
 # Multi-stage: build the Go daemon
 FROM golang:1.24-bookworm AS daemon-builder
 
@@ -31,8 +35,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # Verify binaries built correctly
 RUN /out/atomicagentd --version && /out/atomic-agent-ctl --version
 
-# Final bootable image
-ARG BASE_IMAGE=ghcr.io/tichomir/atomic-cloud:latest
+# Final bootable image — uses BASE_IMAGE ARG declared at top of file
 FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.title="Agentic OS"
