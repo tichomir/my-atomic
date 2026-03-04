@@ -8,33 +8,13 @@
 # This is the "Agentic OS" described in the Atomic product line.
 # CoreOS : OpenShift :: Agentic OS : Red Hat AI
 #
-# Build: podman build -f images/agentic-os/Containerfile -t agentic-os:latest .
+# Build via Makefile (recommended): make image-agentic
+# The Makefile builds Containerfile.builder first, then this file,
+# injecting the builder image via --build-context and the base via --build-arg.
 
-# Multi-stage: build the Go daemon
-FROM golang:1.24-bookworm AS daemon-builder
-
-WORKDIR /build
-
-# Cache dependencies first
-COPY daemon/go.mod daemon/go.sum ./
-RUN go mod download
-
-# Build daemon and CLI
-COPY daemon/ ./
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w -X main.version=${BUILD_VERSION:-dev}" \
-    -o /out/atomicagentd ./cmd/atomicagentd && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w -X main.version=${BUILD_VERSION:-dev}" \
-    -o /out/atomic-agent-ctl ./cmd/atomic-agent-ctl
-
-# Verify binaries built correctly
-RUN /out/atomicagentd --version && /out/atomic-agent-ctl --version
-
-# Final bootable image
-# The Makefile overrides this with --from $(ATOMIC_CLOUD_IMAGE) at build time.
-# The tag here is the fallback when building manually without the Makefile.
-FROM ghcr.io/tichomir/atomic-cloud:latest
+# Base image is the locally-built atomic-cloud. Passed via --build-arg by Makefile.
+ARG BASE_IMAGE=ghcr.io/tichomir/atomic-cloud:latest
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.title="Agentic OS"
 LABEL org.opencontainers.image.description="Atomic Linux with AI agent safety runtime"
@@ -47,7 +27,7 @@ RUN dnf -y install \
     # Fallback: install from COPR or skip if unavailable in this environment
     (echo "WARNING: Falco RPM not available, skipping" && true)
 
-# Copy compiled binaries from builder stage
+# Copy compiled binaries from the builder image (injected via --build-context)
 COPY --from=daemon-builder /out/atomicagentd /usr/bin/atomicagentd
 COPY --from=daemon-builder /out/atomic-agent-ctl /usr/bin/atomic-agent-ctl
 

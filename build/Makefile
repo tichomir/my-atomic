@@ -91,13 +91,22 @@ image-cloud:
 		..
 	@echo "==> Built $(ATOMIC_CLOUD_IMAGE)"
 
+DAEMON_BUILDER_IMAGE := $(REGISTRY)/$(IMAGE_OWNER)/agentic-os-builder:$(VERSION)
+
 image-agentic: image-base image-cloud
+	@echo "==> Building daemon binaries ($(DAEMON_BUILDER_IMAGE))..."
+	$(PODMAN) build \
+		--file $(IMAGES_DIR)/agentic-os/Containerfile.builder \
+		--tag $(DAEMON_BUILDER_IMAGE) \
+		--build-arg BUILD_VERSION=$(VERSION) \
+		..
 	@echo "==> Building $(AGENTIC_OS_IMAGE)..."
 	$(PODMAN) build \
 		--file $(IMAGES_DIR)/agentic-os/Containerfile \
 		--tag $(AGENTIC_OS_IMAGE) \
 		--build-arg BUILD_VERSION=$(VERSION) \
-		--from $(ATOMIC_CLOUD_IMAGE) \
+		--build-arg BASE_IMAGE=$(ATOMIC_CLOUD_IMAGE) \
+		--build-context daemon-builder=container:$(DAEMON_BUILDER_IMAGE) \
 		..
 	@echo "==> Built $(AGENTIC_OS_IMAGE)"
 
