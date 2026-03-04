@@ -97,11 +97,11 @@ image-cloud:
 
 image-agentic: image-base image-cloud
 	@echo "==> Building $(AGENTIC_OS_IMAGE)..."
+	$(PODMAN) tag $(ATOMIC_CLOUD_IMAGE) ghcr.io/$(IMAGE_OWNER)/atomic-cloud:local-build
 	$(PODMAN) build \
 		--file $(IMAGES_DIR)/agentic-os/Containerfile \
 		--tag $(AGENTIC_OS_IMAGE) \
 		--build-arg BUILD_VERSION=$(VERSION) \
-		--build-arg BASE_IMAGE=$(ATOMIC_CLOUD_IMAGE) \
 		..
 	@echo "==> Built $(AGENTIC_OS_IMAGE)"
 

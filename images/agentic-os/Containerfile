@@ -8,7 +8,8 @@
 # This is the "Agentic OS" described in the Atomic product line.
 # CoreOS : OpenShift :: Agentic OS : Red Hat AI
 #
-# Build: podman build -f images/agentic-os/Containerfile -t agentic-os:latest .
+# Build via Makefile: make image-agentic
+# The Makefile tags atomic-cloud:latest locally before this build runs.
 
 # Multi-stage: build the Go daemon
 FROM golang:1.24-bookworm AS daemon-builder
@@ -23,21 +24,21 @@ RUN go mod download
 COPY daemon/ ./
 # Ensure go.sum is consistent with go.mod (handles indirect dep drift)
 RUN go mod tidy
+ARG BUILD_VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w -X main.version=${BUILD_VERSION:-dev}" \
+    go build -ldflags="-s -w -X main.version=${BUILD_VERSION}" \
     -o /out/atomicagentd ./cmd/atomicagentd && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w -X main.version=${BUILD_VERSION:-dev}" \
+    go build -ldflags="-s -w -X main.version=${BUILD_VERSION}" \
     -o /out/atomic-agent-ctl ./cmd/atomic-agent-ctl
 
 # Verify binaries built correctly
 RUN /out/atomicagentd --version && /out/atomic-agent-ctl --version
 
 # Final bootable image
-# ARG immediately before FROM makes it available for this FROM only.
-# Passed via --build-arg BASE_IMAGE=<tag> by the Makefile.
-ARG BASE_IMAGE=ghcr.io/tichomir/atomic-cloud:latest
-FROM ${BASE_IMAGE}
+# The Makefile runs: podman tag atomic-cloud:<version> atomic-cloud:local-build
+# before this build so this FROM resolves to the locally built image.
+FROM ghcr.io/tichomir/atomic-cloud:local-build
 
 LABEL org.opencontainers.image.title="Agentic OS"
 LABEL org.opencontainers.image.description="Atomic Linux with AI agent safety runtime"
