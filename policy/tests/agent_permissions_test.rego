@@ -4,6 +4,8 @@
 
 package atomic.agent_test
 
+import data.atomic.agent
+
 import future.keywords.if
 import future.keywords.in
 
@@ -37,7 +39,6 @@ mock_infra_agent := {
 
 # Test: workspace read is allowed
 test_workspace_read_allowed if {
-	import data.atomic.agent
 	agent.allow with input as {
 		"action": {
 			"agent_id": "test-agent",
@@ -50,7 +51,6 @@ test_workspace_read_allowed if {
 
 # Test: workspace write is allowed
 test_workspace_write_allowed if {
-	import data.atomic.agent
 	agent.allow with input as {
 		"action": {
 			"agent_id": "test-agent",
@@ -63,7 +63,6 @@ test_workspace_write_allowed if {
 
 # Test: cross-agent workspace access is denied
 test_cross_agent_workspace_denied if {
-	import data.atomic.agent
 	not agent.allow with input as {
 		"action": {
 			"agent_id": "test-agent",
@@ -78,7 +77,6 @@ test_cross_agent_workspace_denied if {
 
 # Test: /etc/shadow read is denied
 test_shadow_read_denied if {
-	import data.atomic.agent
 	not agent.allow with input as {
 		"action": {
 			"agent_id": "test-agent",
@@ -91,7 +89,6 @@ test_shadow_read_denied if {
 
 # Test: /root directory access denied
 test_root_home_denied if {
-	import data.atomic.agent
 	not agent.allow with input as {
 		"action": {
 			"agent_id": "test-agent",
@@ -104,7 +101,6 @@ test_root_home_denied if {
 
 # Test: atomicagentd socket access denied (agents cannot talk to daemon directly)
 test_daemon_socket_denied if {
-	import data.atomic.agent
 	not agent.allow with input as {
 		"action": {
 			"agent_id": "test-agent",
@@ -119,7 +115,6 @@ test_daemon_socket_denied if {
 
 # Test: unknown action type is denied
 test_unknown_action_denied if {
-	import data.atomic.agent
 	not agent.allow with input as {
 		"action": {
 			"agent_id": "test-agent",
@@ -134,7 +129,6 @@ test_unknown_action_denied if {
 
 # Test: infrastructure profile requires audit
 test_infra_requires_audit if {
-	import data.atomic.agent
 	agent.audit_required with input as {
 		"action": {
 			"agent_id": "infra-agent",
@@ -147,7 +141,6 @@ test_infra_requires_audit if {
 
 # Test: network connections require audit regardless of profile
 test_network_requires_audit if {
-	import data.atomic.agent
 	agent.audit_required with input as {
 		"action": {
 			"agent_id": "dev-agent",
@@ -162,12 +155,10 @@ test_network_requires_audit if {
 
 # Test: python3 exec is in default allowlist
 test_python_exec_allowed if {
-	import data.atomic.agent
 	"/usr/bin/python3" in agent.allowed_binaries
 }
 
 # Test: dangerous binary is not in allowlist
 test_dangerous_binary_not_allowed if {
-	import data.atomic.agent
 	not "/usr/bin/tcpdump" in agent.allowed_binaries
 }
