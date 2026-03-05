@@ -54,3 +54,12 @@ is_private_network if {
 is_private_network if {
 	net.cidr_contains("192.168.0.0/16", input.action.resource)
 }
+
+# Allow public internet for developer and infrastructure profiles.
+# Blocked endpoints and private ranges defined above take precedence.
+allow_network if {
+	input.action.action_type == "network_connect"
+	input.agent.profile in {"developer", "infrastructure"}
+	not is_blocked_endpoint
+	not is_private_network
+}

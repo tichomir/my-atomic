@@ -88,6 +88,13 @@ some_allow_rule_matches if {
 	input.action.action_type == "tool_call"
 }
 
+# Allow network connections when the network policy permits.
+# developer/infrastructure profiles get public internet; all profiles get localhost.
+some_allow_rule_matches if {
+	input.action.action_type == "network_connect"
+	data.atomic.agent.network.allow_network
+}
+
 # --- Deny rules for sensitive paths ---
 
 sensitive_paths := {

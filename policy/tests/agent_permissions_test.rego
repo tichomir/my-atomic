@@ -151,6 +151,44 @@ test_network_requires_audit if {
 	}
 }
 
+# --- Network policy tests ---
+
+# Test: developer profile can reach public internet
+test_developer_network_allowed if {
+	agent.allow with input as {
+		"action": {
+			"agent_id": "dev-agent",
+			"action_type": "network_connect",
+			"resource": "8.8.8.8",
+		},
+		"agent": mock_developer_agent,
+	}
+}
+
+# Test: minimal profile cannot reach public internet
+test_minimal_network_denied if {
+	not agent.allow with input as {
+		"action": {
+			"agent_id": "test-agent",
+			"action_type": "network_connect",
+			"resource": "8.8.8.8",
+		},
+		"agent": mock_minimal_agent,
+	}
+}
+
+# Test: no profile can reach cloud metadata service (SSRF)
+test_metadata_ssrf_denied if {
+	not agent.allow with input as {
+		"action": {
+			"agent_id": "dev-agent",
+			"action_type": "network_connect",
+			"resource": "169.254.169.254",
+		},
+		"agent": mock_developer_agent,
+	}
+}
+
 # --- Allowed binaries tests ---
 
 # Test: python3 exec is in default allowlist
