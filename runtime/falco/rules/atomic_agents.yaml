@@ -49,20 +49,11 @@
   priority: CRITICAL
   tags: [atomic, agent, credential-access, prompt-injection]
 
-# Rule: Agent reading other agents' workspaces
-- rule: AI Agent Cross-Workspace Access
-  desc: An AI agent is attempting to read another agent's workspace
-  condition: >
-    is_atomic_agent and
-    open_read and
-    in_agent_workspace and
-    not fd.name startswith concat("/var/lib/atomic/agents/", proc.env["ATOMIC_AGENT_ID"])
-  output: >
-    AI agent cross-workspace access attempt
-    (attacker_agent=%proc.env[ATOMIC_AGENT_ID]
-     target_path=%fd.name pid=%proc.pid)
-  priority: CRITICAL
-  tags: [atomic, agent, isolation, lateral-movement]
+# Note: AI Agent Cross-Workspace Access rule was removed.
+# It required concat("/var/lib/atomic/agents/", proc.env["ATOMIC_AGENT_ID"])
+# to distinguish an agent's own workspace from others', but concat() is not
+# a valid function in Falco condition expressions. Cross-workspace isolation
+# is enforced at the systemd BindPaths level instead.
 
 # --- Shell spawning rules ---
 
@@ -160,8 +151,7 @@
     is_atomic_agent and
     open_read and
     fd.name startswith /proc/ and
-    not fd.name startswith /proc/self and
-    not fd.name startswith concat("/proc/", proc.pid)
+    not fd.name startswith /proc/self
   output: >
     AI agent /proc filesystem escape attempt
     (agent_id=%proc.env[ATOMIC_AGENT_ID]
