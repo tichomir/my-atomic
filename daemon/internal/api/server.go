@@ -20,13 +20,14 @@ import (
 // The socket is owned by atomic-admin group (mode 0660) so that
 // members of that group can use atomic-agent-ctl without sudo.
 type Server struct {
-	socketPath string
-	listener   net.Listener
-	httpServer *http.Server
-	manager    *agent.Manager
-	policyEng  *policy.Engine
-	auditor    *audit.Logger
-	logger     *slog.Logger
+	socketPath      string
+	listener        net.Listener
+	httpServer      *http.Server
+	falcoHTTPServer *http.Server
+	manager         *agent.Manager
+	policyEng       *policy.Engine
+	auditor         *audit.Logger
+	logger          *slog.Logger
 }
 
 // NewServer creates an API server.
@@ -87,7 +88,32 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully stops the server.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.falcoHTTPServer != nil {
+		_ = s.falcoHTTPServer.Shutdown(ctx)
+	}
 	return s.httpServer.Shutdown(ctx)
+}
+
+// StartFalcoWebhookListener binds a TCP HTTP server so Falco's http_output can
+// POST events to atomicagentd. Falco cannot post to a Unix socket, so we need
+// this separate listener. addr is typically "127.0.0.1:9765".
+func (s *Server) StartFalcoWebhookListener(addr string) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /falco", s.handleFalcoWebhook)
+
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("binding Falco webhook listener on %s: %w", addr, err)
+	}
+
+	s.falcoHTTPServer = &http.Server{Handler: mux}
+	go func() {
+		if err := s.falcoHTTPServer.Serve(l); err != nil && err != http.ErrServerClosed {
+			s.logger.Error("Falco webhook listener error", "error", err)
+		}
+	}()
+	s.logger.Info("Falco webhook listener started", "addr", addr)
+	return nil
 }
 
 // --- Request/Response types ---

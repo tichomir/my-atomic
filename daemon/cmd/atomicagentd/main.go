@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -138,6 +139,17 @@ func run(configPath string) error {
 	server := api.NewServer(cfg.Agents.APISocket, mgr, policyEng, auditor)
 	if err := server.Start(); err != nil {
 		return fmt.Errorf("starting API server: %w", err)
+	}
+
+	// Start Falco webhook TCP listener so Falco http_output can reach us.
+	// atomicagentd's main API is on a Unix socket; Falco cannot POST to a socket.
+	if cfg.Runtime.FalcoEnabled && cfg.Runtime.FalcoWebhookURL != "" {
+		u, err := url.Parse(cfg.Runtime.FalcoWebhookURL)
+		if err == nil && u.Host != "" {
+			if err := server.StartFalcoWebhookListener(u.Host); err != nil {
+				logger.Warn("could not start Falco webhook listener", "error", err)
+			}
+		}
 	}
 
 	// Log startup event
