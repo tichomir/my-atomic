@@ -6,17 +6,6 @@
 #   - engine.modern_ebpf.cpus_for_each_buffer (not cpus_for_each_syscall_handler)
 #   - syscall_event_drops moved to metrics section
 #
-# Engine choice:
-#   We use the legacy eBPF probe (kind: ebpf) rather than modern_ebpf.
-#   modern_ebpf is CO-RE but its embedded BTF type matchers don't yet cover
-#   very recent kernels (e.g. Fedora 42 / 6.18+), causing scap_init failure.
-#   The legacy probe is kernel-specific and downloaded by falcoctl, giving
-#   reliable support across all kernel versions that falcoctl indexes.
-#
-#   When running via falco-bpf.service, the probe path is set automatically
-#   via the FALCO_BPF_PROBE environment variable by the service unit.
-#   For manual runs: export FALCO_BPF_PROBE=$(falcoctl driver config --type ebpf --name falco)
-#
 # Our custom rules are self-contained (all macros defined in atomic_base.yaml)
 # so we do NOT reference /etc/falco/falco_rules.yaml which no longer ships
 # at that path in 0.38+ (managed by falcoctl instead).
@@ -46,18 +35,10 @@ http_output:
   keep_alive: false
 
 # --- Engine ---
-# Legacy eBPF probe, compiled at image-build time for the bundled kernel.
-#
-# The probe is at /usr/share/atomic/falco/falco-bpf.o (immutable /usr).
-# It is built by the agentic-os Containerfile using the kernel-devel RPM
-# that matches the kernel in the image, so it is always in sync.
-# No runtime falcoctl driver install is needed or performed.
 engine:
-  kind: ebpf
-  ebpf:
-    probe: /usr/share/atomic/falco/falco-bpf.o
-    buf_size_preset: 4    # 4 = 8 MiB ring buffers per CPU
-    drop_failed_exit: false
+  kind: modern_ebpf
+  modern_ebpf:
+    cpus_for_each_buffer: 1
 
 # --- Logging ---
 log_stderr: true

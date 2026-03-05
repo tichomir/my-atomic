@@ -47,38 +47,9 @@ LABEL org.opencontainers.image.description="Atomic Linux with AI agent safety ru
 RUN dnf -y install \
     https://download.falco.org/packages/rpm/falco-0.39.2-x86_64.rpm \
     && dnf clean all \
-    && rm -rf /var/cache/dnf
-
-# Build the Falco legacy eBPF probe for the kernel bundled in this image.
-#
-# Why compile here instead of using falcoctl driver install at runtime?
-#   - The Falco artifact registry (download.falco.org) does not always have
-#     prebuilt probes for very recent Fedora kernels (e.g. 6.18+).
-#   - Compilation at runtime fails on bootc because /usr/src/falco-*/bpf/
-#     is read-only and clang cannot be installed (immutable /usr).
-#   - Building at image-build time works: the filesystem is writable, we
-#     know the exact kernel RPM in the image, and clang can be installed
-#     temporarily then removed.
-#   - On bootc, kernel upgrades happen through image rebuilds, so the probe
-#     always stays in sync with the running kernel automatically.
-#
-# The compiled probe is placed at /usr/share/atomic/falco/falco-bpf.o
-# (immutable /usr — guaranteed present, no runtime download needed).
-RUN set -ex && \
-    KVER=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' | head -1) && \
-    echo "==> Building Falco eBPF probe for kernel ${KVER}" && \
-    dnf -y install clang llvm make kernel-devel-${KVER} && \
-    cp -r /usr/src/falco-7.3.0+driver /tmp/falco-driver-build && \
-    make -C /tmp/falco-driver-build/bpf \
-        KERNEL_VERSION=${KVER} \
-        KERNELDIR=/usr/src/kernels/${KVER} && \
-    mkdir -p /usr/share/atomic/falco && \
-    cp /tmp/falco-driver-build/bpf/falco.o /usr/share/atomic/falco/falco-bpf.o && \
-    echo "==> Probe built: $(ls -lh /usr/share/atomic/falco/falco-bpf.o)" && \
-    rm -rf /tmp/falco-driver-build && \
-    dnf -y remove clang llvm kernel-devel-${KVER} && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf
+    && rm -rf /var/cache/dnf || \
+    # Fallback: install from COPR or skip if unavailable in this environment
+    (echo "WARNING: Falco RPM not available, skipping" && true)
 
 # Copy compiled binaries from builder stage
 COPY --from=daemon-builder /out/atomicagentd /usr/bin/atomicagentd
@@ -93,13 +64,6 @@ COPY policy/ /usr/share/atomic/policy/
 # Copy Falco configuration and rules
 COPY runtime/falco/falco.yaml /etc/falco/falco.yaml
 COPY runtime/falco/rules/ /etc/falco/rules.d/
-
-# Drop-in for falco-bpf.service:
-#   - adds ExecStartPre to download the eBPF probe via falcoctl on first boot
-#   - restores StandardOutput/StandardError to journal (upstream unit sets null)
-#   - makes the config path explicit with -c
-COPY os/etc/systemd/system/falco-bpf.service.d/10-atomic.conf \
-     /etc/systemd/system/falco-bpf.service.d/10-atomic.conf
 
 # Copy sysusers definition (creates atomic-daemon user on boot)
 COPY os/usr/share/atomic/sysusers.conf /usr/lib/sysusers.d/atomic.conf

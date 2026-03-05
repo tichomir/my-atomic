@@ -1,5 +1,5 @@
 enable atomicagentd.service
 enable atomic-policy.service
 enable atomic-audit.service
-enable falco-bpf.service
+enable falco-modern-bpf.service
 enable falcoctl-artifact-follow.service
