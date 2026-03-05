@@ -15,9 +15,6 @@
     (proc.env["ATOMIC_AGENT_ID"] exists and
      proc.env["ATOMIC_AGENT_ID"] != "")
 
-- macro: agent_id
-  condition: proc.env["ATOMIC_AGENT_ID"]
-
 - macro: in_agent_workspace
   condition: >
     fd.name startswith /var/lib/atomic/agents/
