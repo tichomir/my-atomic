@@ -45,6 +45,7 @@ func NewServer(socketPath string, mgr *agent.Manager, eng *policy.Engine, aud *a
 	mux.HandleFunc("GET /v1/agents/{id}", s.handleGetAgent)
 	mux.HandleFunc("POST /v1/agents/{id}/start", s.handleStartAgent)
 	mux.HandleFunc("POST /v1/agents/{id}/stop", s.handleStopAgent)
+	mux.HandleFunc("POST /v1/agents/{id}/unregister", s.handleUnregisterAgent)
 	mux.HandleFunc("DELETE /v1/agents/{id}", s.handleKillAgent)
 	mux.HandleFunc("POST /v1/policy/evaluate", s.handleEvaluatePolicy)
 	mux.HandleFunc("POST /v1/policy/reload", s.handleReloadPolicy)
@@ -204,6 +205,16 @@ func (s *Server) handleKillAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "killed"})
+}
+
+func (s *Server) handleUnregisterAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	purge := r.URL.Query().Get("purge") == "true"
+	if err := s.manager.Unregister(id, purge); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "unregistered"})
 }
 
 func (s *Server) handleEvaluatePolicy(w http.ResponseWriter, r *http.Request) {

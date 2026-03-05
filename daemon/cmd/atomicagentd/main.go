@@ -129,6 +129,11 @@ func run(configPath string) error {
 		MaxAgents:     cfg.Agents.MaxConcurrent,
 	}, sandbox, policyEng, auditor)
 
+	// Restore agents that were registered before the last restart
+	if err := mgr.LoadPersistedAgents(); err != nil {
+		logger.Warn("could not restore persisted agents", "error", err)
+	}
+
 	// Initialize API server
 	server := api.NewServer(cfg.Agents.APISocket, mgr, policyEng, auditor)
 	if err := server.Start(); err != nil {

@@ -34,6 +34,7 @@ func main() {
 	agentCmd := &cobra.Command{Use: "agent", Short: "Manage AI agents"}
 	agentCmd.AddCommand(
 		newAgentRegisterCmd(),
+		newAgentUnregisterCmd(),
 		newAgentStartCmd(),
 		newAgentStopCmd(),
 		newAgentKillCmd(),
@@ -97,6 +98,30 @@ func newAgentRegisterCmd() *cobra.Command {
 		"Policy profile (minimal, developer, infrastructure)")
 	cmd.Flags().StringVar(&exec, "exec", "",
 		"Agent executable path")
+	return cmd
+}
+
+func newAgentUnregisterCmd() *cobra.Command {
+	var purge bool
+	cmd := &cobra.Command{
+		Use:   "unregister <id>",
+		Short: "Unregister an agent (removes it from the registry)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := fmt.Sprintf("/v1/agents/%s/unregister", args[0])
+			if purge {
+				path += "?purge=true"
+			}
+			var result map[string]string
+			if err := apiCall("POST", path, nil, &result); err != nil {
+				return err
+			}
+			fmt.Printf("Agent %s: %s\n", args[0], result["status"])
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&purge, "purge", false,
+		"Also delete the agent's workspace directory")
 	return cmd
 }
 

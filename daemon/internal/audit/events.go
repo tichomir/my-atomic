@@ -7,6 +7,7 @@ type EventType string
 
 const (
 	EventAgentRegistered   EventType = "agent.registered"
+	EventAgentUnregistered EventType = "agent.unregistered"
 	EventAgentStarted      EventType = "agent.started"
 	EventAgentStopped      EventType = "agent.stopped"
 	EventAgentKilled       EventType = "agent.killed"

@@ -3,6 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -26,11 +29,12 @@ const (
 // RuntimeAgent combines the policy record with live runtime state.
 type RuntimeAgent struct {
 	policy.AgentRecord
-	State         State
-	StartedAt     *time.Time
-	StoppedAt     *time.Time
-	ExitCode      *int
-	KillReason    string
+	ExecPath   string // executable that runs as the agent process
+	State      State
+	StartedAt  *time.Time
+	StoppedAt  *time.Time
+	ExitCode   *int
+	KillReason string
 }
 
 // Manager orchestrates the full lifecycle of agents: registration, start, stop, kill.
@@ -92,16 +96,87 @@ func (m *Manager) Register(id, profile, execStart string) (*RuntimeAgent, error)
 
 	ra := &RuntimeAgent{
 		AgentRecord: record,
+		ExecPath:    execStart,
 		State:       StateRegistered,
 	}
 
 	m.agents[id] = ra
 	m.policyEng.RegisterAgent(&record)
 
+	if err := saveRegistry(m.cfg.WorkspaceRoot, m.agents); err != nil {
+		slog.Warn("failed to persist agent registry", "error", err)
+	}
+
 	m.auditor.LogAgentLifecycle(id, audit.EventAgentRegistered,
 		fmt.Sprintf("agent %s registered with profile %s", id, profile))
 
 	return ra, nil
+}
+
+// Unregister removes an agent from the registry.
+// The agent must not be running or starting; stop or kill it first.
+// If purgeWorkspace is true the agent's directory under WorkspaceRoot is deleted.
+func (m *Manager) Unregister(id string, purgeWorkspace bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ra, ok := m.agents[id]
+	if !ok {
+		return fmt.Errorf("agent %q not registered", id)
+	}
+	if ra.State == StateRunning || ra.State == StateStarting || ra.State == StateStopping {
+		return fmt.Errorf("agent %q is %s; stop or kill it before unregistering", id, ra.State)
+	}
+
+	workspacePath := ra.WorkspacePath
+	delete(m.agents, id)
+	m.policyEng.UnregisterAgent(id)
+
+	if err := saveRegistry(m.cfg.WorkspaceRoot, m.agents); err != nil {
+		slog.Warn("failed to persist agent registry after unregister", "error", err)
+	}
+
+	if purgeWorkspace {
+		// workspace is /var/lib/atomic/agents/<id>/workspace — remove the parent dir
+		agentDir := filepath.Dir(workspacePath)
+		if err := os.RemoveAll(agentDir); err != nil {
+			slog.Warn("failed to remove agent workspace", "agent_id", id, "dir", agentDir, "error", err)
+		}
+	}
+
+	m.auditor.LogAgentLifecycle(id, audit.EventAgentUnregistered,
+		fmt.Sprintf("agent %s unregistered (purge=%v)", id, purgeWorkspace))
+
+	return nil
+}
+
+// LoadPersistedAgents restores agent registrations from the on-disk registry.
+// Call once after NewManager(), before accepting API requests.
+// Agents are restored in StateRegistered; any running systemd units are not restarted.
+func (m *Manager) LoadPersistedAgents() error {
+	entries, err := loadRegistry(m.cfg.WorkspaceRoot)
+	if err != nil {
+		return fmt.Errorf("loading persisted agents: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, e := range entries {
+		if _, exists := m.agents[e.ID]; exists {
+			continue // already registered (shouldn't happen at startup)
+		}
+		record := e.toAgentRecord()
+		ra := &RuntimeAgent{
+			AgentRecord: record,
+			ExecPath:    e.ExecPath,
+			State:       StateRegistered,
+		}
+		m.agents[e.ID] = ra
+		m.policyEng.RegisterAgent(&record)
+		slog.Info("restored persisted agent", "agent_id", e.ID, "profile", e.Profile)
+	}
+	return nil
 }
 
 // Start launches a registered agent inside its sandbox.
@@ -239,8 +314,10 @@ func (m *Manager) ListAgents() []*RuntimeAgent {
 }
 
 // ExecStart returns the agent's executable path.
-// The actual exec path is the first entry in AllowedBinaries for this agent.
 func (ra *RuntimeAgent) ExecStart() string {
+	if ra.ExecPath != "" {
+		return ra.ExecPath
+	}
 	if len(ra.AgentRecord.AllowedBinaries) > 0 {
 		return ra.AgentRecord.AllowedBinaries[0]
 	}
