@@ -65,6 +65,13 @@ COPY policy/ /usr/share/atomic/policy/
 COPY runtime/falco/falco.yaml /etc/falco/falco.yaml
 COPY runtime/falco/rules/ /etc/falco/rules.d/
 
+# Drop-in for falco-bpf.service:
+#   - adds ExecStartPre to download the eBPF probe via falcoctl on first boot
+#   - restores StandardOutput/StandardError to journal (upstream unit sets null)
+#   - makes the config path explicit with -c
+COPY os/etc/systemd/system/falco-bpf.service.d/10-atomic.conf \
+     /etc/systemd/system/falco-bpf.service.d/10-atomic.conf
+
 # Copy sysusers definition (creates atomic-daemon user on boot)
 COPY os/usr/share/atomic/sysusers.conf /usr/lib/sysusers.d/atomic.conf
 
