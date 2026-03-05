@@ -128,8 +128,10 @@ qcow2: $(OUTPUT_DIR)
 		--rm \
 		--privileged \
 		-v $(CURDIR)/$(OUTPUT_DIR):/output \
+		-v /var/lib/containers/storage:/var/lib/containers/storage \
 		quay.io/centos-bootc/bootc-image-builder:latest \
 		--type qcow2 \
+		--rootfs xfs \
 		--output /output \
 		$(AGENTIC_OS_IMAGE)
 	@echo "==> QEMU image: $(OUTPUT_DIR)/qcow2/disk.qcow2"

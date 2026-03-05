@@ -46,8 +46,8 @@ make image-agentic
 ### Step 2 — Convert to a bootable disk image
 
 ```bash
-# Requires podman machine running with --rootful for privileged operations
-podman machine init --cpus 2 --memory 4096 --disk-size 30
+# macOS only: podman machine is not needed on Linux (podman runs natively there)
+podman machine init --cpus 2 --memory 4096 --disk-size 30 --rootful
 podman machine start
 podman machine ssh -- sudo usermod -aG wheel core
 
