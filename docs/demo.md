@@ -118,13 +118,15 @@ atomic-agent-ctl agent register logo-finder \
 atomic-agent-ctl agent start logo-finder
 
 # Open a second terminal and watch the audit log
-journalctl -t atomic-audit -f -o json | jq '{
+# journalctl -o json wraps the audit payload inside MESSAGE as a JSON string,
+# so pipe through fromjson before selecting fields.
+journalctl -t atomic-audit -f -o json | jq '.MESSAGE | fromjson | {
   time: .timestamp,
-  type: .type,
+  type,
   agent: .agent_id,
   action: .action_type,
-  resource: .resource,
-  decision: .decision
+  resource,
+  decision
 }'
 ```
 
