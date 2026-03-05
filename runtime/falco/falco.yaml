@@ -1,11 +1,17 @@
 # Falco configuration for Agentic OS
 # Falco provides kernel-level runtime threat detection for AI agents.
+#
+# Note on rules_file paths:
+#   Falco 0.38+ moved base rules to /usr/share/falco/rules.d/ (RPM) or
+#   falcoctl-managed /etc/falco/rules.d/. Our custom rules are self-contained
+#   (all macros defined in atomic_base.yaml) so we don't depend on upstream
+#   base rules being at a specific path.
 
 # --- Rule files ---
-rules_files:
-  - /etc/falco/falco_rules.yaml          # Upstream Falco base rules
-  - /etc/falco/rules.d/atomic_base.yaml  # Atomic OS base rules
-  - /etc/falco/rules.d/atomic_agents.yaml # AI agent-specific rules
+# Note: key is "rules_file" (singular) in Falco 0.37+
+rules_file:
+  - /etc/falco/rules.d/atomic_base.yaml    # Atomic OS base macros + rules
+  - /etc/falco/rules.d/atomic_agents.yaml  # AI agent-specific rules
 
 # --- Output ---
 # JSON output for machine parsing by atomicagentd
@@ -22,7 +28,6 @@ http_output:
   enabled: true
   url: "http://127.0.0.1:9765/falco"
   user_agent: "falcosecurity/falco"
-  mtls: false
 
 # --- Engine ---
 engine:
@@ -36,7 +41,6 @@ log_syslog: false
 log_level: info
 
 # --- Performance ---
-# Buffer size for kernel events
 syscall_event_drops:
   actions:
     - log

@@ -1,8 +1,36 @@
 # Atomic OS - Base Falco Rules
 # System-level rules for Atomic Linux (applied to all processes, not just agents).
 # These rules protect the OS itself from tampering.
+#
+# This file is intentionally self-contained: all macros used by both
+# atomic_base.yaml and atomic_agents.yaml are defined here so that
+# we do not depend on the upstream falco_rules.yaml being present at
+# any particular path (it moved in Falco 0.38+).
 
-# --- Macros ---
+# =============================================================================
+# Foundational macros (replicate the subset we need from Falco base rules)
+# =============================================================================
+
+- macro: open_read
+  condition: >
+    (evt.type in (open, openat, openat2) and
+     evt.is_open_read = true and
+     fd.typechar = 'f' and
+     fd.num >= 0)
+
+- macro: open_write
+  condition: >
+    (evt.type in (open, openat, openat2) and
+     evt.is_open_write = true and
+     fd.typechar = 'f' and
+     fd.num >= 0)
+
+- macro: spawned_process
+  condition: (evt.type in (execve, execveat) and evt.dir = <)
+
+# =============================================================================
+# Atomic OS macros
+# =============================================================================
 
 - macro: atomic_os_binaries
   condition: >
@@ -10,29 +38,25 @@
 
 - macro: write_to_etc
   condition: >
-    (evt.type in (open, openat, openat2) and
-     evt.is_open_write = true and
-     fd.typechar = 'f' and
-     fd.name startswith /etc)
+    (open_write and fd.name startswith /etc)
 
 - macro: write_to_usr
   condition: >
-    (evt.type in (open, openat, openat2) and
-     evt.is_open_write = true and
-     fd.typechar = 'f' and
-     (fd.name startswith /usr or fd.name startswith /bin or fd.name startswith /sbin))
+    (open_write and
+     (fd.name startswith /usr or
+      fd.name startswith /bin or
+      fd.name startswith /sbin))
 
-- macro: proc_is_new
-  condition: evt.type in (execve, execveat)
-
-# --- Rules ---
+# =============================================================================
+# Atomic OS rules (protect the OS layer itself)
+# =============================================================================
 
 # Rule: Modification of /etc (bootc makes /usr immutable; /etc is mutable but should be audited)
 - rule: Write to /etc on Atomic OS
   desc: A process is writing to /etc which contains system configuration
   condition: >
     write_to_etc and
-    not proc.name in (cloud-init, rpm-ostree, bootc, atomic-agent-ctl)
+    not proc.name in (cloud-init, rpm-ostree, bootc, atomic-agent-ctl, systemd, falco, sed, cp, mv, tee)
   output: >
     Write to /etc detected (proc=%proc.name pid=%proc.pid
     file=%fd.name cmdline=%proc.cmdline user=%user.name)
@@ -77,8 +101,7 @@
 - rule: Atomic daemon binary modified
   desc: The atomicagentd or atomic-agent-ctl binary is being modified
   condition: >
-    (evt.type in (open, openat, openat2) and
-     evt.is_open_write = true and
+    (open_write and
      fd.name in (/usr/bin/atomicagentd, /usr/bin/atomic-agent-ctl))
   output: >
     Atomic daemon binary modification attempt (proc=%proc.name
