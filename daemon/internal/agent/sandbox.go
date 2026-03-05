@@ -89,7 +89,13 @@ func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) erro
 		{Name: "LimitNOFILE", Value: makeVariant(uint64(1024))},
 
 		// Workspace and environment
-		{Name: "BindPaths", Value: makeVariant([]string{cfg.WorkspacePath})},
+		// BindPaths D-Bus type is a(ssbt): array of {source, dest, ignoreEnoent, flags}
+		{Name: "BindPaths", Value: makeVariant([]bindPathEntry{{
+			Source:       cfg.WorkspacePath,
+			Destination:  cfg.WorkspacePath,
+			IgnoreEnoent: false,
+			Flags:        0,
+		}})},
 		{Name: "Environment", Value: makeVariant([]string{
 			fmt.Sprintf("ATOMIC_AGENT_ID=%s", cfg.AgentID),
 			fmt.Sprintf("ATOMIC_AGENT_PROFILE=%s", cfg.Profile),
@@ -188,6 +194,15 @@ func (m *SandboxManager) Close() {
 type addressFamilyRestriction struct {
 	IsAllowList bool
 	Families    []string
+}
+
+// bindPathEntry is the Go representation of the D-Bus (ssbt) struct that
+// systemd expects for each element of the BindPaths property.
+type bindPathEntry struct {
+	Source       string
+	Destination  string
+	IgnoreEnoent bool
+	Flags        uint64
 }
 
 // makeVariant wraps a value in godbus.Variant, which is the type required by
