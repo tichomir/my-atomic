@@ -63,6 +63,13 @@ COPY policy/ /usr/share/atomic/policy/
 COPY runtime/falco/falco.yaml /etc/falco/falco.yaml
 COPY runtime/falco/rules/ /etc/falco/rules.d/
 
+# Drop-in for falco-modern-bpf.service:
+#   - makes config path explicit with -c
+#   - restores StandardOutput/StandardError to journal (upstream sets null,
+#     silencing all Falco alert output from journalctl)
+COPY os/etc/systemd/system/falco-modern-bpf.service.d/10-atomic.conf \
+     /etc/systemd/system/falco-modern-bpf.service.d/10-atomic.conf
+
 # Copy sysusers definition (creates atomic-daemon user on boot)
 COPY os/usr/share/atomic/sysusers.conf /usr/lib/sysusers.d/atomic.conf
 
