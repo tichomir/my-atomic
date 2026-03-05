@@ -67,6 +67,12 @@ func (m *SandboxManager) ProvisionWorkspace(agentID string) (string, error) {
 }
 
 // StartAgent starts a sandboxed agent as a transient systemd unit.
+//
+// All hardening properties are set here rather than relying on a static
+// template unit, because StartTransientUnit fails if any fragment file
+// (including a template like atomic-agent@.service) already exists for
+// the unit name. Setting properties via D-Bus also works within the daemon's
+// own ProtectSystem=strict sandbox since no filesystem writes are required.
 func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) error {
 	unitName := SystemdUnitName(cfg.AgentID)
 
@@ -75,9 +81,14 @@ func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) erro
 	properties := []dbus.Property{
 		dbus.PropDescription(fmt.Sprintf("Atomic Agent: %s [%s]", cfg.AgentID, cfg.Profile)),
 		dbus.PropExecStart([]string{cfg.ExecStart}, false),
+
+		// Resource limits (per-profile values override these via cfg)
 		{Name: "MemoryMax", Value: makeVariant(uint64(cfg.MemoryMaxMB) * 1024 * 1024)},
 		{Name: "CPUQuotaPerSecUSec", Value: makeVariant(uint64(cfg.CPUQuotaPct) * 10000)},
 		{Name: "TasksMax", Value: makeVariant(uint64(cfg.TasksMax))},
+		{Name: "LimitNOFILE", Value: makeVariant(uint64(1024))},
+
+		// Workspace and environment
 		{Name: "BindPaths", Value: makeVariant([]string{cfg.WorkspacePath})},
 		{Name: "Environment", Value: makeVariant([]string{
 			fmt.Sprintf("ATOMIC_AGENT_ID=%s", cfg.AgentID),
@@ -85,8 +96,33 @@ func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) erro
 			"ATOMIC_POLICY_SOCKET=/run/atomic/policy.sock",
 			"ATOMIC_AUDIT_SOCKET=/run/atomic/audit.sock",
 		})},
-		{Name: "PrivateNetwork", Value: makeVariant(!cfg.AllowNetwork)},
+
+		// Identity: ephemeral UID per agent, no persistent identity
 		{Name: "DynamicUser", Value: makeVariant(true)},
+
+		// Network isolation
+		{Name: "PrivateNetwork", Value: makeVariant(!cfg.AllowNetwork)},
+		{Name: "RestrictAddressFamilies", Value: makeVariant([]string{"AF_UNIX", "AF_INET", "AF_INET6"})},
+
+		// Filesystem hardening
+		{Name: "PrivateTmp", Value: makeVariant(true)},
+		{Name: "PrivateDevices", Value: makeVariant(true)},
+		{Name: "PrivateIPC", Value: makeVariant(true)},
+		{Name: "ProtectSystem", Value: makeVariant("strict")},
+		{Name: "ProtectHome", Value: makeVariant(true)},
+		{Name: "ProtectKernelTunables", Value: makeVariant(true)},
+		{Name: "ProtectKernelModules", Value: makeVariant(true)},
+		{Name: "ProtectClock", Value: makeVariant(true)},
+		{Name: "ProtectHostname", Value: makeVariant(true)},
+		{Name: "ProtectProc", Value: makeVariant("invisible")},
+
+		// Privilege hardening
+		{Name: "CapabilityBoundingSet", Value: makeVariant(uint64(0))},
+		{Name: "NoNewPrivileges", Value: makeVariant(true)},
+		{Name: "MemoryDenyWriteExecute", Value: makeVariant(true)},
+		{Name: "RestrictSUIDSGID", Value: makeVariant(true)},
+		{Name: "LockPersonality", Value: makeVariant(true)},
+		{Name: "RestrictRealtime", Value: makeVariant(true)},
 	}
 
 	ch := make(chan string)

@@ -1,0 +1,3 @@
+enable atomicagentd.service
+enable atomic-policy.service
+enable atomic-audit.service

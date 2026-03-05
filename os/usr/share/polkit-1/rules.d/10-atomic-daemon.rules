@@ -1,0 +1,18 @@
+// Polkit rules for atomicagentd
+//
+// Grants the atomic-daemon system user permission to start and stop
+// transient systemd units via D-Bus. This is required so atomicagentd
+// can launch and kill agent sandboxes (atomic-agent@<id>.service) without
+// interactive authentication.
+//
+// The permission is intentionally scoped to manage-units only; the daemon's
+// own systemd sandboxing (CapabilityBoundingSet, SystemCallFilter, etc.)
+// restricts what it can actually do once running.
+
+polkit.addRule(function(action, subject) {
+    if ((action.id === "org.freedesktop.systemd1.manage-units" ||
+         action.id === "org.freedesktop.systemd1.manage-unit-files") &&
+        subject.user === "atomic-daemon") {
+        return polkit.Result.YES;
+    }
+});

@@ -68,11 +68,6 @@ COPY runtime/falco/rules/ /etc/falco/rules.d/
 # Copy sysusers definition (creates atomic-daemon user on boot)
 COPY os/usr/share/atomic/sysusers.conf /usr/lib/sysusers.d/atomic.conf
 
-# Enable Agentic OS services
-RUN systemctl enable atomicagentd.service \
-    atomic-policy.service \
-    atomic-audit.service \
-    falco.service || true
 
 # Create state directories with correct ownership
 # (Will be owned by DynamicUser=atomic-daemon after sysusers runs)
@@ -81,6 +76,10 @@ RUN mkdir -p /var/lib/atomic/agents \
     /usr/share/atomic/policy \
     && chmod 750 /var/lib/atomic/agents \
     && chmod 755 /usr/share/atomic/policy
+
+# Demo user for local QEMU testing (not for production)
+RUN useradd -m -G wheel cloud-user && \
+    echo 'cloud-user:demo' | chpasswd
 
 # Validate bootc image
 RUN bootc container lint

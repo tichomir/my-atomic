@@ -41,7 +41,10 @@ func WorkspacePath(workspaceRoot, agentID string) string {
 	return fmt.Sprintf("%s/%s/workspace", workspaceRoot, agentID)
 }
 
-// SystemdUnitName returns the systemd unit name for an agent.
+// SystemdUnitName returns the systemd unit name for an agent sandbox.
+// Uses a non-template naming scheme (atomic-sandbox-<id>) so that
+// StartTransientUnit does not conflict with the atomic-agent@.service
+// template fragment on the (immutable) filesystem.
 func SystemdUnitName(agentID string) string {
-	return fmt.Sprintf("atomic-agent@%s.service", agentID)
+	return fmt.Sprintf("atomic-sandbox-%s.service", agentID)
 }
