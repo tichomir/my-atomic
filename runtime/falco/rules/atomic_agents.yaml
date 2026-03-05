@@ -184,7 +184,7 @@
     proc.count > 200
   output: >
     AI agent possible fork bomb (agent_id=%proc.env[ATOMIC_AGENT_ID]
-    process_count=%proc.count pid=%proc.pid)
+    pid=%proc.pid cmdline=%proc.cmdline)
   priority: ERROR
   tags: [atomic, agent, resource-abuse]
 
