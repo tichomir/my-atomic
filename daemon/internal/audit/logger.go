@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+
+	sdjournal "github.com/coreos/go-systemd/v22/journal"
 )
 
 // Logger writes structured audit events to systemd journal and/or a file.
@@ -63,9 +65,25 @@ func (l *Logger) Log(event Event) {
 	}
 
 	if l.journalEnabled {
-		// Write to stderr as structured JSON; systemd journal captures it.
-		// Using fmt.Fprintf directly preserves exact JSON structure.
-		fmt.Fprintf(os.Stderr, "%s\n", data)
+		// Write directly to the systemd journal socket with SYSLOG_IDENTIFIER=atomic-audit
+		// so events appear under: journalctl -t atomic-audit
+		// This is preferred over writing to stderr (which would tag entries as "atomicagentd").
+		priority := sdjournal.PriInfo
+		switch event.Severity {
+		case SeverityCritical:
+			priority = sdjournal.PriCrit
+		case SeverityError:
+			priority = sdjournal.PriErr
+		case SeverityWarning:
+			priority = sdjournal.PriWarning
+		}
+		err := sdjournal.Send(string(data), priority, map[string]string{
+			"SYSLOG_IDENTIFIER": "atomic-audit",
+		})
+		if err != nil {
+			// Fall back to stderr if the journal socket is unavailable
+			fmt.Fprintf(os.Stderr, "%s\n", data)
+		}
 	}
 
 	if l.fileEnabled && l.fileWriter != nil {
