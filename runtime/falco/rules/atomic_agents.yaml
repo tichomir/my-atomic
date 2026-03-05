@@ -174,19 +174,9 @@
   tags: [atomic, agent, sandbox-escape]
 
 # --- Resource abuse rules ---
-
-# Rule: Agent creating too many processes (fork bomb pattern)
-- rule: AI Agent Possible Fork Bomb
-  desc: An AI agent is spawning an unusually large number of processes
-  condition: >
-    is_atomic_agent and
-    spawned_process and
-    proc.count > 200
-  output: >
-    AI agent possible fork bomb (agent_id=%proc.env[ATOMIC_AGENT_ID]
-    pid=%proc.pid cmdline=%proc.cmdline)
-  priority: ERROR
-  tags: [atomic, agent, resource-abuse]
+# Note: Fork bomb detection via proc.count was removed — proc.count is not a
+# valid field in Falco 0.38+. Fork bomb protection is enforced at the kernel
+# level via TasksMax in the agent's systemd transient unit instead.
 
 # --- Package installation rules ---
 
