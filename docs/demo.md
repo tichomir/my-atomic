@@ -241,7 +241,7 @@ Even if an agent somehow bypassed atomicagentd, Falco catches it.
 
 ```bash
 # Watch Falco events
-journalctl -u falco -f
+journalctl -u falco-modern-bpf -f
 
 # In another terminal, simulate an agent process trying to read /etc/shadow
 # (In a real demo you'd trigger this from inside the agent sandbox)
@@ -354,7 +354,14 @@ curl -I https://ghcr.io/v2/
 
 **Falco not starting**
 ```bash
-systemctl status falco
-# On some VMs the eBPF probe needs kernel headers:
+# The Falco RPM ships split service units; we use the modern eBPF variant
+systemctl status falco-modern-bpf
+systemctl enable --now falco-modern-bpf
+
+# Check whether the eBPF probe loaded (kernel ≥ 5.8 required)
+journalctl -u falco-modern-bpf -n 30
+
+# If you see "bpf probe" or "kernel headers" errors:
 dnf install -y kernel-devel-$(uname -r)
+systemctl restart falco-modern-bpf
 ```
