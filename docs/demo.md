@@ -79,7 +79,7 @@ ssh -p 2222 cloud-user@localhost
 # Verify Agentic OS is running
 $ systemctl status atomicagentd
 ● atomicagentd.service - Atomic Agent Daemon
-     Loaded: loaded (/usr/lib/systemd/system/atomicagentd.service)
+     Loaded: loaded (/usr/lib/systemd/system/atomicagentd.service; enabled; preset: enabled)
      Active: active (running)
 
 $ atomic-agent-ctl system status
@@ -300,11 +300,40 @@ This is the key differentiator from traditional OS updates: **rollback is as fas
 
 ## Troubleshooting
 
+**`atomicagentd` not enabled on boot**
+```bash
+# The service is enabled via a systemd preset baked into /usr (immutable).
+# If you see "disabled" it means you're on an older image build.
+# Fix on the running VM (writes to writable /etc):
+systemctl enable atomicagentd.service
+# The next image rebuild includes the preset fix automatically.
+```
+
 **`atomicagentd` won't start**
 ```bash
 journalctl -u atomicagentd -n 50
 # Check: policy files present at /usr/share/atomic/policy/
 # Check: /run/atomic/ directory exists with correct permissions
+# Check: atomic-daemon system user exists
+id atomic-daemon
+```
+
+**`agent start` returns "Interactive authentication required"**
+```bash
+# atomicagentd needs polkit permission to start transient systemd units.
+# The permission is granted via /usr/share/polkit-1/rules.d/10-atomic-daemon.rules
+# (baked into /usr). On an older image, apply the workaround to writable /etc:
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/10-atomic-daemon.rules << 'EOF'
+polkit.addRule(function(action, subject) {
+    if ((action.id === "org.freedesktop.systemd1.manage-units" ||
+         action.id === "org.freedesktop.systemd1.manage-unit-files") &&
+        subject.user === "atomic-daemon") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+systemctl restart atomicagentd
 ```
 
 **Policy eval returns "agent not registered"**

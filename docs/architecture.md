@@ -44,20 +44,33 @@ Falco watches the syscall (independently)
 
 ## Sandbox Model
 
-Every agent runs as a transient systemd unit. The hardening applied is:
+Every agent runs as a transient systemd unit created via D-Bus by `atomicagentd`.
+All hardening properties are set programmatically in the `StartTransientUnit` call
+(not from a static unit file), which works within `atomicagentd`'s own
+`ProtectSystem=strict` sandbox without requiring filesystem writes.
 
 | Property | Value | Effect |
 |---|---|---|
 | `DynamicUser=yes` | ephemeral UID | No persistent identity across runs |
 | `CapabilityBoundingSet=` | empty | Zero Linux capabilities |
+| `NoNewPrivileges=yes` | enforced | setuid binaries are ineffective |
 | `PrivateTmp=yes` | isolated | Agent cannot see other /tmp files |
 | `PrivateDevices=yes` | isolated | No /dev access |
-| `ProtectSystem=strict` | read-only | /usr, /boot are immutable |
-| `NoNewPrivileges=yes` | enforced | setuid binaries are ineffective |
-| `SystemCallFilter=@system-service` | seccomp | ~300 syscalls allowed, rest blocked |
-| `MemoryDenyWriteExecute=yes` | enforced | No JIT injection |
+| `PrivateIPC=yes` | isolated | No shared memory / IPC access |
 | `PrivateNetwork=yes` | minimal profile | Complete network isolation |
-| `BindPaths=workspace` | explicit | Only workspace is writable |
+| `ProtectSystem=strict` | read-only | /usr, /boot are immutable to the agent |
+| `ProtectHome=yes` | enforced | No access to user home directories |
+| `ProtectProc=invisible` | enforced | Agent cannot see other processes in /proc |
+| `ProtectKernelTunables=yes` | enforced | No sysctl writes |
+| `ProtectKernelModules=yes` | enforced | No module loading |
+| `ProtectClock=yes` | enforced | No system clock manipulation |
+| `ProtectHostname=yes` | enforced | Cannot change hostname |
+| `MemoryDenyWriteExecute=yes` | enforced | No JIT injection |
+| `RestrictSUIDSGID=yes` | enforced | setuid/setgid bits are ignored |
+| `LockPersonality=yes` | enforced | Cannot change execution domain |
+| `RestrictRealtime=yes` | enforced | No real-time scheduling |
+| `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6` | allowlist | No raw sockets, no netlink |
+| `BindPaths=workspace` | explicit | Only the agent's workspace is writable |
 
 ## Policy Engine
 
