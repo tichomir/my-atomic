@@ -76,6 +76,16 @@ func (m *SandboxManager) ProvisionWorkspace(agentID string) (string, error) {
 func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) error {
 	unitName := SystemdUnitName(cfg.AgentID)
 
+	// If the unit is already loaded (e.g. stuck in "failed" state from a previous
+	// attempt), systemd refuses to create a new transient unit with the same name.
+	// Reset it so we start clean.
+	if props, err := m.conn.GetUnitPropertiesContext(ctx, unitName); err == nil {
+		activeState, _ := props["ActiveState"].(string)
+		if activeState == "failed" || activeState == "inactive" {
+			_ = m.conn.ResetFailedUnitContext(ctx, unitName)
+		}
+	}
+
 	// Build systemd unit properties for the transient unit.
 	// Property.Value must be a godbus.Variant (github.com/godbus/dbus/v5).
 	properties := []dbus.Property{
