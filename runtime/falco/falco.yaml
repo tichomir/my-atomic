@@ -1,14 +1,8 @@
 # Falco configuration for Agentic OS
-# Falco 0.39.x compatible configuration.
-#
-# Key changes from older configs (0.36 → 0.38+):
-#   - rules_files (plural) is the correct key — NOT rules_file
-#   - engine.modern_ebpf.cpus_for_each_buffer (not cpus_for_each_syscall_handler)
-#   - syscall_event_drops moved to metrics section
+# Falco 0.43.x compatible configuration.
 #
 # Our custom rules are self-contained (all macros defined in atomic_base.yaml)
-# so we do NOT reference /etc/falco/falco_rules.yaml which no longer ships
-# at that path in 0.38+ (managed by falcoctl instead).
+# so we do NOT reference /etc/falco/falco_rules.yaml (managed by falcoctl).
 
 # --- Rule files ---
 rules_files:

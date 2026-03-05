@@ -45,11 +45,9 @@ LABEL org.opencontainers.image.description="Atomic Linux with AI agent safety ru
 
 # Install Falco for runtime threat detection
 RUN dnf -y install \
-    https://download.falco.org/packages/rpm/falco-0.39.2-x86_64.rpm \
+    https://download.falco.org/packages/rpm/falco-0.43.0-x86_64.rpm \
     && dnf clean all \
-    && rm -rf /var/cache/dnf || \
-    # Fallback: install from COPR or skip if unavailable in this environment
-    (echo "WARNING: Falco RPM not available, skipping" && true)
+    && rm -rf /var/cache/dnf
 
 # Copy compiled binaries from builder stage
 COPY --from=daemon-builder /out/atomicagentd /usr/bin/atomicagentd
