@@ -46,14 +46,17 @@ http_output:
   keep_alive: false
 
 # --- Engine ---
-# legacy eBPF: kernel-specific probe, downloaded by falcoctl driver install.
-# Probe path comes from FALCO_BPF_PROBE env var (set by falco-bpf.service)
-# or from the path below as fallback for manual runs.
+# Legacy eBPF probe, compiled at image-build time for the bundled kernel.
+#
+# The probe is at /usr/share/atomic/falco/falco-bpf.o (immutable /usr).
+# It is built by the agentic-os Containerfile using the kernel-devel RPM
+# that matches the kernel in the image, so it is always in sync.
+# No runtime falcoctl driver install is needed or performed.
 engine:
   kind: ebpf
   ebpf:
-    probe: ""             # empty = use FALCO_BPF_PROBE env var
-    buf_size_preset: 4    # 4 = 8 MiB ring buffers per CPU (same as modern_ebpf default)
+    probe: /usr/share/atomic/falco/falco-bpf.o
+    buf_size_preset: 4    # 4 = 8 MiB ring buffers per CPU
     drop_failed_exit: false
 
 # --- Logging ---
