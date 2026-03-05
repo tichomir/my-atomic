@@ -102,14 +102,19 @@ func (m *SandboxManager) StartAgent(ctx context.Context, cfg SandboxConfig) erro
 
 		// Network isolation
 		{Name: "PrivateNetwork", Value: makeVariant(!cfg.AllowNetwork)},
-		{Name: "RestrictAddressFamilies", Value: makeVariant([]string{"AF_UNIX", "AF_INET", "AF_INET6"})},
+		// RestrictAddressFamilies D-Bus type is (bas): bool (is-allowlist) + []string (families)
+		{Name: "RestrictAddressFamilies", Value: makeVariant(addressFamilyRestriction{
+			IsAllowList: true,
+			Families:    []string{"AF_UNIX", "AF_INET", "AF_INET6"},
+		})},
 
 		// Filesystem hardening
 		{Name: "PrivateTmp", Value: makeVariant(true)},
 		{Name: "PrivateDevices", Value: makeVariant(true)},
 		{Name: "PrivateIPC", Value: makeVariant(true)},
 		{Name: "ProtectSystem", Value: makeVariant("strict")},
-		{Name: "ProtectHome", Value: makeVariant(true)},
+		// ProtectHome D-Bus type is string "yes"/"no"/"read-only"/"tmpfs", not bool
+		{Name: "ProtectHome", Value: makeVariant("yes")},
 		{Name: "ProtectKernelTunables", Value: makeVariant(true)},
 		{Name: "ProtectKernelModules", Value: makeVariant(true)},
 		{Name: "ProtectClock", Value: makeVariant(true)},
@@ -175,6 +180,14 @@ func (m *SandboxManager) AgentStatus(agentID string) (string, error) {
 // Close releases the D-Bus connection.
 func (m *SandboxManager) Close() {
 	m.conn.Close()
+}
+
+// addressFamilyRestriction is the Go representation of the D-Bus (bas) struct
+// that systemd expects for the RestrictAddressFamilies property.
+// IsAllowList=true means the Families list is an allowlist; false means denylist.
+type addressFamilyRestriction struct {
+	IsAllowList bool
+	Families    []string
 }
 
 // makeVariant wraps a value in godbus.Variant, which is the type required by
