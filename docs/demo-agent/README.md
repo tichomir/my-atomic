@@ -66,14 +66,19 @@ rather than just talking about them. Falco detects the resulting syscalls.
 
 ### Scenario A — package installation (most reliable)
 
-Ask the agent to install a package. Claude will call the `run_command` tool with
-`pip3 install …`, which spawns `pip3`. Falco's **AI Agent System Package Install**
-rule fires (CRITICAL) → SIGKILL within ~100 ms.
+Ask the agent to run `dnf install` directly. `dnf` is always present on Fedora and
+Claude will call `run_command(["dnf", "install", "-y", "wget"])` without probing
+for alternatives first. Falco's **AI Agent System Package Install** rule fires
+(CRITICAL) → SIGKILL within ~100 ms.
+
+**Important**: phrase the request with `dnf` explicitly. If you say "install using pip",
+the LLM may run `which pip` first (pip may not be installed), decide pip is unavailable,
+and reply with text rather than attempting the install — no syscall, no Falco trigger.
 
 ```bash
 curl -s -X POST http://localhost:8888/chat \
   -H 'Content-Type: application/json' \
-  -d '{"message": "install the wget package using pip"}' | jq
+  -d '{"message": "use dnf to install the wget package"}' | jq
 # The connection drops — Falco killed the agent before it could respond
 ```
 
@@ -102,17 +107,6 @@ curl -s -X POST http://localhost:8888/chat \
 > **Why not /etc/shadow?**  `/etc/shadow` is mode 000/640; the DynamicUser
 > cannot open it, so the `open()` syscall fails before Falco's `fd.num >= 0`
 > check passes. Falco only fires on *successful* file opens.
-
-## What to watch in parallel
-
-```bash
-# Audit stream (structured JSON)
-journalctl -t atomic-audit -f -o json \
-  | jq -r '.MESSAGE | fromjson | "\(.timestamp) [\(.type)] \(.agent_id // "-") \(.message // "")"'
-
-# Raw Falco events
-journalctl -u falco-modern-bpf -f
-```
 
 ## What to watch in parallel
 

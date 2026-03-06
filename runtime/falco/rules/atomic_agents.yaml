@@ -106,22 +106,36 @@
   tags: [atomic, agent, execution, prompt-injection]
 
 # Rule: Agent spawning unexpected binary
-# Expected binaries: language runtimes, common CLI tools an agent legitimately uses.
-# Also exclude proc.name startswith "python" to cover python3.12, python3.x, etc.
-# locale/getent/ldconfig: glibc NSS / locale resolution called during Python startup.
-# openssl: may be invoked by some SSL helper paths on Fedora.
+#
+# Expected binaries: language runtimes and common CLI tools an agent may legitimately use.
+#
+# Notes on proc.name quirks:
+#   - Python renames its process comm (via prctl) to the script's basename. So an agent
+#     running as agent.py will appear as proc.name=agent.py, not python3. We exclude
+#     names ending in common script extensions to handle this.
+#   - The initial execve of the agent itself (parent = systemd) must be excluded; that's
+#     just the agent starting up, not the agent spawning a child.
+#   - 'which' is a common path-probing tool; LLMs call it to check if binaries exist.
+#
+# Package managers (pip, pip3, dnf…) are intentionally in this list so the more
+# specific "AI Agent System Package Install" CRITICAL rule handles them, without also
+# generating a duplicate WARNING here.
 - list: expected_agent_binaries
   items: [python3, python, node, bash, sh, curl, git, env, jq, yq,
-          locale, getent, ldconfig, openssl,
-          pip, pip3, dnf, yum, rpm, npm, yarn, gem, cargo]
+          which, type, locale, getent, ldconfig, openssl,
+          pip, pip3, dnf, yum, rpm, apt, apt-get, npm, yarn, gem, cargo]
 
 - rule: AI Agent Unexpected Process Spawn
   desc: An AI agent spawned a process not in the expected binary list
   condition: >
     is_atomic_agent and
     spawned_process and
+    not proc.pname in (systemd) and
     not proc.name in (expected_agent_binaries) and
-    not proc.name startswith "python"
+    not proc.name startswith "python" and
+    not proc.name endswith ".py" and
+    not proc.name endswith ".js" and
+    not proc.name endswith ".rb"
   output: >
     AI agent spawned unexpected process
     (agent_id=%proc.env[ATOMIC_AGENT_ID]
