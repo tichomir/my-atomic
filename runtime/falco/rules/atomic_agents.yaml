@@ -50,16 +50,21 @@
     open_read and
     (fd.name startswith /etc/shadow or
      fd.name startswith /root/.ssh or
+     fd.name startswith /root/.aws or
+     fd.name startswith /root/.gcloud or
      fd.name startswith /home and fd.name contains "/.ssh/" or
      fd.name startswith /home and fd.name contains "/.aws/" or
      fd.name startswith /home and fd.name contains "/.gcloud/" or
-     fd.name contains ".pem" or
-     fd.name contains ".key" or
      fd.name contains "id_rsa" or
      fd.name contains "id_ed25519" or
+     fd.name contains "id_ecdsa" or
      fd.name contains ".kubeconfig" or
      fd.name contains "kubeconfig") and
     not in_agent_workspace
+  # Removed: fd.name contains ".pem" — catches /etc/pki/tls/cert.pem (the system
+  # CA bundle that Python/urllib reads for every HTTPS request) → false-positive kill.
+  # Removed: fd.name contains ".key" — too broad; catches SSL host keys, fonts, etc.
+  # Path-based matches above cover the real credential targets instead.
   output: >
     AI agent credential access attempt
     (agent_id=%proc.env[ATOMIC_AGENT_ID]
