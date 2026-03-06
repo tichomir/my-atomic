@@ -302,7 +302,8 @@ func (s *Server) handleFalcoWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agentID := payload.Fields.ProcEnvAtomic
+	// Normalize: Falco may render hyphens as underscores in output text; agent IDs use hyphens.
+	agentID := strings.ReplaceAll(payload.Fields.ProcEnvAtomic, "_", "-")
 	isCritical := strings.ToUpper(payload.Priority) == "CRITICAL"
 
 	s.auditor.LogRuntimeAlert(agentID, payload.Rule, payload.Output, isCritical)

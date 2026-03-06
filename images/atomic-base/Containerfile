@@ -52,6 +52,11 @@ RUN systemctl enable chronyd.service || true
 COPY os/usr /usr
 COPY os/etc /etc
 
+# SELinux: label agent exec scripts as bin_t so atomicagentd's DynamicUser
+# processes (running in init_t domain) can execute them without AVC denials.
+# restorecon is called by atomicagentd at agent-registration time to apply this.
+RUN semanage fcontext -a -t bin_t '/var/lib/atomic/agents/[^/]+/[^/]+'
+
 # Validate that this is a valid bootc image
 RUN bootc container lint
 

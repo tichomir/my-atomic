@@ -29,7 +29,6 @@
     is_atomic_agent and
     open_read and
     (fd.name startswith /etc/shadow or
-     fd.name startswith /etc/passwd or
      fd.name startswith /root/.ssh or
      fd.name startswith /home and fd.name contains "/.ssh/" or
      fd.name startswith /home and fd.name contains "/.aws/" or

@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	godbus "github.com/godbus/dbus/v5"
@@ -54,8 +56,14 @@ func NewSandboxManager(workspaceRoot string) (*SandboxManager, error) {
 
 // ProvisionWorkspace creates the agent's workspace directory.
 func (m *SandboxManager) ProvisionWorkspace(agentID string) (string, error) {
+	// Agent root (0755): world-traversable so DynamicUser can reach exec binaries placed here.
+	agentRoot := filepath.Join(m.workspaceRoot, agentID)
+	if err := os.MkdirAll(agentRoot, 0755); err != nil {
+		return "", fmt.Errorf("creating agent dir %s: %w", agentRoot, err)
+	}
+	// Workspace (0750): only root/group can write; DynamicUser gets access via BindPaths.
 	path := WorkspacePath(m.workspaceRoot, agentID)
-	if err := os.MkdirAll(path, 0750); err != nil {
+	if err := os.Mkdir(path, 0750); err != nil && !os.IsExist(err) {
 		return "", fmt.Errorf("creating workspace %s: %w", path, err)
 	}
 	// Create a metadata file so the workspace is identifiable
@@ -63,6 +71,12 @@ func (m *SandboxManager) ProvisionWorkspace(agentID string) (string, error) {
 	if err := os.WriteFile(meta, []byte(agentID), 0640); err != nil {
 		return "", fmt.Errorf("writing agent metadata: %w", err)
 	}
+
+	// Apply SELinux file contexts defined in the image policy (no-op if SELinux is disabled).
+	if out, err := exec.Command("restorecon", "-R", agentRoot).CombinedOutput(); err != nil {
+		slog.Warn("restorecon failed for agent dir", "agent_id", agentID, "output", string(out), "error", err)
+	}
+
 	return path, nil
 }
 
