@@ -53,7 +53,11 @@ RUN systemctl enable chronyd.service || true
 #                                 rootfs; it always fails and pollutes `systemctl --failed`.
 #   NetworkManager-wait-online — Times out on VMs / cloud instances, delays boot, and
 #                                 is not required by any atomic service.
-RUN systemctl mask dkms.service NetworkManager-wait-online.service
+RUN systemctl mask dkms.service NetworkManager-wait-online.service \
+                   falcoctl-artifact-follow.service
+# falcoctl-artifact-follow auto-downloads Falco rules from the Falco Hub and
+# overwrites /etc/falco/rules.d/ — which clobbers our custom agent rules.
+# We manage our own rules (deployed by the COPY below), so this must be masked.
 
 # Copy OS-layer configuration into the image
 COPY os/usr /usr
