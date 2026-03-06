@@ -11,13 +11,6 @@
 # Foundational macros (replicate the subset we need from Falco base rules)
 # =============================================================================
 
-- macro: open_read
-  condition: >
-    (evt.type in (open, openat, openat2) and
-     evt.is_open_read = true and
-     fd.typechar = 'f' and
-     fd.num >= 0)
-
 - macro: open_write
   condition: >
     (evt.type in (open, openat, openat2) and
@@ -25,16 +18,9 @@
      fd.typechar = 'f' and
      fd.num >= 0)
 
-- macro: spawned_process
-  condition: (evt.type in (execve, execveat) and evt.dir = <)
-
 # =============================================================================
 # Atomic OS macros
 # =============================================================================
-
-- macro: atomic_os_binaries
-  condition: >
-    proc.name in (atomicagentd, atomic-agent-ctl, falco, systemd)
 
 - macro: write_to_etc
   condition: >

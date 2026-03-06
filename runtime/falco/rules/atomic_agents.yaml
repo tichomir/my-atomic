@@ -8,6 +8,26 @@
 #   - Sandbox escape attempts
 #   - Resource abuse
 
+# =============================================================================
+# Foundational macros used only by agent rules
+# (open_read and spawned_process are defined here rather than atomic_base.yaml
+#  because no OS-level rules in that file reference them; defining them there
+#  causes LOAD_UNUSED_MACRO warnings in Falco 0.38+)
+# =============================================================================
+
+- macro: open_read
+  condition: >
+    (evt.type in (open, openat, openat2) and
+     evt.is_open_read = true and
+     fd.typechar = 'f' and
+     fd.num >= 0)
+
+# Note: evt.dir was removed in Falco 0.38+ (enter events were dropped).
+# The original condition was `evt.type in (execve, execveat) and evt.dir = <`.
+# evt.dir = < always evaluated to true, so it is simply removed here.
+- macro: spawned_process
+  condition: (evt.type in (execve, execveat))
+
 # --- Agent detection macros ---
 
 - macro: is_atomic_agent
