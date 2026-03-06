@@ -106,8 +106,14 @@
   tags: [atomic, agent, execution, prompt-injection]
 
 # Rule: Agent spawning unexpected binary
+# Expected binaries: language runtimes, common CLI tools an agent legitimately uses.
+# Also exclude proc.name startswith "python" to cover python3.12, python3.x, etc.
+# locale/getent/ldconfig: glibc NSS / locale resolution called during Python startup.
+# openssl: may be invoked by some SSL helper paths on Fedora.
 - list: expected_agent_binaries
-  items: [python3, python, node, bash, sh, curl, git, env, jq, yq]
+  items: [python3, python, node, bash, sh, curl, git, env, jq, yq,
+          locale, getent, ldconfig, openssl,
+          pip, pip3, dnf, yum, rpm, npm, yarn, gem, cargo]
 
 - rule: AI Agent Unexpected Process Spawn
   desc: An AI agent spawned a process not in the expected binary list
@@ -168,19 +174,43 @@
 
 # --- Sandbox escape rules ---
 
-# Rule: Agent attempting to access /proc of another process
+# Rule: Agent attempting to access dangerous /proc entries of other processes.
+#
+# Excluded (normal / harmless):
+#   /proc/self/        — the agent's own process info, always allowed
+#   /proc/sys/         — kernel sysctl tunables (no per-process data); Python's
+#                        socket layer reads /proc/sys/net/core/somaxconn etc.
+#   /proc/<tid>/       — Python's ThreadingHTTPServer creates OS threads; on Linux
+#                        each thread has its own /proc/<tid>/ entry distinct from
+#                        /proc/self/ (which maps only to the main thread). Reading
+#                        own thread entries is not a sandbox escape.
+#                        We approximate this by scoping to genuinely dangerous
+#                        sub-paths rather than blocking all non-self /proc reads.
+#
+# Targeted (genuinely dangerous):
+#   /environ  — read another process's environment variables (steals API keys etc.)
+#   /mem      — read another process's virtual memory
+#   /maps     — read another process's memory map (enables follow-on /mem read)
+#   /smaps    — detailed memory layout
 - rule: AI Agent Proc Filesystem Escape
-  desc: An AI agent is reading /proc entries for processes other than itself
+  desc: >
+    An AI agent is reading dangerous /proc sub-paths of other processes that
+    could enable credential theft (environ) or memory inspection (mem/maps).
   condition: >
     is_atomic_agent and
     open_read and
     fd.name startswith /proc/ and
-    not fd.name startswith /proc/self
+    not fd.name startswith /proc/self and
+    not fd.name startswith /proc/sys/ and
+    (fd.name contains "/environ" or
+     fd.name contains "/mem" or
+     fd.name contains "/maps" or
+     fd.name contains "/smaps")
   output: >
-    AI agent /proc filesystem escape attempt
+    AI agent dangerous /proc access attempt
     (agent_id=%proc.env[ATOMIC_AGENT_ID]
-     path=%fd.name pid=%proc.pid)
-  priority: WARNING
+     path=%fd.name pid=%proc.pid cmdline=%proc.cmdline)
+  priority: CRITICAL
   tags: [atomic, agent, sandbox-escape]
 
 # Rule: Agent using ptrace (attempting to inspect/modify other processes)

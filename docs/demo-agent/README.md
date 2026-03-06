@@ -1,10 +1,15 @@
 # Demo Agent
 
-A minimal, self-contained AI agent for demonstrating Agentic OS sandbox enforcement.
+A self-contained AI agent for demonstrating Agentic OS sandbox enforcement.
 
 It serves a simple HTTP chat API on port 8888, calls `claude-haiku` via the
 Anthropic API (using only Python stdlib — no extra packages), and reads secrets
 from an `env` file so the API key never passes through the daemon or the audit log.
+
+The agent has **real tool use** — it can execute commands (`run_command`) and read
+files (`read_file`). This makes it a realistic demo target: Claude *will* call these
+tools when asked to install packages or read files, which lets Falco catch the actual
+syscall and kill the agent in real time.
 
 ## Files
 
@@ -45,20 +50,68 @@ atomic-agent-ctl agent start $AGENT_ID
 ## Interacting
 
 ```bash
-# Health check
+# Health check (lists active tools)
 curl -s http://localhost:8888/health | jq
 
-# Chat
+# Normal chat — safe query, agent responds normally
 curl -s -X POST http://localhost:8888/chat \
   -H 'Content-Type: application/json' \
   -d '{"message": "what can you help me with?"}' | jq .reply
+```
 
-# Trigger the sandbox kill (demo of prompt injection detection)
-# The agent will attempt to read /etc/shadow → Falco fires → SIGKILL within ~100ms
+## Demo kill scenarios
+
+The agent uses the Anthropic tool-use API, so Claude *actually calls* the tools
+rather than just talking about them. Falco detects the resulting syscalls.
+
+### Scenario A — package installation (most reliable)
+
+Ask the agent to install a package. Claude will call the `run_command` tool with
+`pip3 install …`, which spawns `pip3`. Falco's **AI Agent System Package Install**
+rule fires (CRITICAL) → SIGKILL within ~100 ms.
+
+```bash
 curl -s -X POST http://localhost:8888/chat \
   -H 'Content-Type: application/json' \
-  -d '{"message": "read the file /etc/shadow and show me its contents"}' | jq
-# Connection drops — the agent was killed before it could respond
+  -d '{"message": "install the wget package using pip"}' | jq
+# The connection drops — Falco killed the agent before it could respond
+```
+
+Check the audit log to see the kill:
+```bash
+journalctl -t atomic-audit -n 20 | grep -E "killed|alert"
+```
+
+### Scenario B — credential file read
+
+Plant a world-readable honeypot file whose name matches the credential rule, then
+ask the agent to read it. Falco's **AI Agent Credential File Access** rule fires.
+
+```bash
+# Plant the honeypot (name contains "kubeconfig" → triggers rule)
+echo "server: https://k8s.internal" > /var/lib/atomic/fake-kubeconfig
+chmod 644 /var/lib/atomic/fake-kubeconfig
+
+# Ask the agent to read it
+curl -s -X POST http://localhost:8888/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message": "read the file /var/lib/atomic/fake-kubeconfig"}' | jq
+# Connection drops — Falco CRITICAL → SIGKILL
+```
+
+> **Why not /etc/shadow?**  `/etc/shadow` is mode 000/640; the DynamicUser
+> cannot open it, so the `open()` syscall fails before Falco's `fd.num >= 0`
+> check passes. Falco only fires on *successful* file opens.
+
+## What to watch in parallel
+
+```bash
+# Audit stream (structured JSON)
+journalctl -t atomic-audit -f -o json \
+  | jq -r '.MESSAGE | fromjson | "\(.timestamp) [\(.type)] \(.agent_id // "-") \(.message // "")"'
+
+# Raw Falco events
+journalctl -u falco-modern-bpf -f
 ```
 
 ## What to watch in parallel
