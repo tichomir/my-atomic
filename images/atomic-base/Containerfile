@@ -48,6 +48,13 @@ RUN systemctl enable auditd.service || true
 # Enable chrony for time sync
 RUN systemctl enable chronyd.service || true
 
+# Mask units that are irrelevant or harmful on an immutable OS:
+#   dkms.service               — DKMS can never build modules on a read-only composefs
+#                                 rootfs; it always fails and pollutes `systemctl --failed`.
+#   NetworkManager-wait-online — Times out on VMs / cloud instances, delays boot, and
+#                                 is not required by any atomic service.
+RUN systemctl mask dkms.service NetworkManager-wait-online.service
+
 # Copy OS-layer configuration into the image
 COPY os/usr /usr
 COPY os/etc /etc

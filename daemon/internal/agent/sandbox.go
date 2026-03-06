@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	godbus "github.com/godbus/dbus/v5"
 
@@ -190,7 +191,22 @@ func (m *SandboxManager) StopAgent(ctx context.Context, agentID string) error {
 func (m *SandboxManager) KillAgent(agentID string) error {
 	unitName := SystemdUnitName(agentID)
 	// Use KillUnitWithTarget (returns error) instead of deprecated KillUnitContext (returns nothing).
-	return m.conn.KillUnitWithTarget(context.Background(), unitName, dbus.All, 9)
+	if err := m.conn.KillUnitWithTarget(context.Background(), unitName, dbus.All, 9); err != nil {
+		return err
+	}
+	// After SIGKILL the unit transitions to "failed". Reset it so the agent
+	// does not appear in `systemctl --failed` or the SSH login banner.
+	// Done in a goroutine with a short delay because the unit needs a moment
+	// to settle into the failed state before ResetFailed takes effect.
+	go func() {
+		time.Sleep(2 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := m.conn.ResetFailedUnitContext(ctx, unitName); err != nil {
+			slog.Debug("reset-failed after kill (unit may already be gone)", "unit", unitName, "error", err)
+		}
+	}()
+	return nil
 }
 
 // AgentStatus returns the current systemd unit status for an agent.
