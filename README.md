@@ -56,10 +56,18 @@ sudo reboot
 ### Register and run an AI agent
 
 ```bash
-# Register an agent with the minimal (most restrictive) profile
+# Register an agent — atomicagentd creates /var/lib/atomic/agents/my-agent/
 atomic-agent-ctl agent register my-agent \
   --profile minimal \
-  --exec /usr/bin/my-ai-agent
+  --exec /var/lib/atomic/agents/my-agent/agent.py
+
+# Place your exec script (must be world-readable and executable)
+cp my-agent.py /var/lib/atomic/agents/my-agent/agent.py
+chmod 755 /var/lib/atomic/agents/my-agent/agent.py
+
+# Drop secrets into an env file (stays out of the audit log)
+echo "MY_API_KEY=..." > /var/lib/atomic/agents/my-agent/env
+chmod 600 /var/lib/atomic/agents/my-agent/env
 
 # Start the agent in its sandbox
 atomic-agent-ctl agent start my-agent
@@ -122,7 +130,9 @@ my-atomic/
 │   ├── atomic-base/     # Atomic Linux base image
 │   ├── atomic-cloud/    # Cloud-provider additions
 │   └── agentic-os/      # Full agentic safety stack
-├── os/                  # OS-layer config (kernel args, systemd units, sysctl)
+├── os/                  # OS-layer config (baked into the image)
+│   ├── usr/lib/systemd/ # systemd service units
+│   └── usr/lib/tmpfiles.d/ # boot-time directory layout with correct modes
 ├── daemon/              # Go: atomicagentd daemon + atomic-agent-ctl CLI
 ├── policy/              # OPA Rego policies (deny-by-default)
 │   ├── base/            # Core permission rules
@@ -131,6 +141,7 @@ my-atomic/
 ├── runtime/             # Falco configuration and agent detection rules
 ├── build/               # Makefile and build scripts
 └── docs/                # Architecture, policy reference, getting started
+    └── demo-agent/      # Ready-to-run demo agent (Python, Anthropic API)
 ```
 
 ## License

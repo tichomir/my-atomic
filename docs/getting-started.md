@@ -61,29 +61,73 @@ atomic-agent-ctl system status
 
 ## Your first agent
 
+Each agent needs an executable script in its own directory under
+`/var/lib/atomic/agents/`. The directory is created automatically by
+`atomicagentd` when you register the agent. The script must be
+world-readable and world-executable so the sandboxed dynamic user can run it.
+
 ```bash
-# Register a minimal (most restrictive) agent
+# 1. Register the agent — atomicagentd creates /var/lib/atomic/agents/hello-agent/
 atomic-agent-ctl agent register hello-agent \
   --profile minimal \
-  --exec /usr/bin/python3
+  --exec /var/lib/atomic/agents/hello-agent/run.py
 
-# Start it
+# 2. Place and permission the exec script
+cat > /var/lib/atomic/agents/hello-agent/run.py << 'EOF'
+#!/usr/bin/python3
+import os, time
+agent_id = os.environ.get("ATOMIC_AGENT_ID", "unknown")
+workspace = f"/var/lib/atomic/agents/{agent_id}/workspace"
+print(f"[{agent_id}] started, workspace={workspace}", flush=True)
+# Write a file to the workspace to prove it works
+with open(f"{workspace}/hello.txt", "w") as f:
+    f.write("hello from the sandbox\n")
+print(f"[{agent_id}] wrote hello.txt", flush=True)
+time.sleep(3600)   # stay alive so you can inspect it
+EOF
+chmod 755 /var/lib/atomic/agents/hello-agent/run.py
+
+# 3. Start it
 atomic-agent-ctl agent start hello-agent
 
-# Check its status
+# 4. Check its status
 atomic-agent-ctl agent status hello-agent
 
-# Test a policy decision
+# 5. Verify the workspace write landed
+cat /var/lib/atomic/agents/hello-agent/workspace/hello.txt
+
+# 6. Test a policy decision
 atomic-agent-ctl policy eval hello-agent \
   --action filesystem_write \
   --resource /var/lib/atomic/agents/hello-agent/workspace/hello.txt
+# [ALLOW]
 
-# Watch audit events
+atomic-agent-ctl policy eval hello-agent \
+  --action filesystem_read \
+  --resource /etc/shadow
+# [DENY]
+
+# 7. Watch audit events
 journalctl -t atomic-audit -f -o json | jq '{type:.type, agent:.agent_id, decision:.decision}'
 
-# Stop the agent
+# 8. Stop the agent
 atomic-agent-ctl agent stop hello-agent
 ```
+
+### Agent directory layout
+
+```
+/var/lib/atomic/agents/<id>/
+├── run.py         # your exec script (world-readable, +x)
+├── env            # optional secrets file (chmod 600, read at startup)
+│                  # format: KEY=value, one per line, # for comments
+└── workspace/     # writable by the agent, bind-mounted into the sandbox
+```
+
+> **Secrets**: pass API keys via the `env` file rather than hardcoding them.
+> `atomicagentd` does not pass env vars through the registration API, so the
+> agent script reads `/var/lib/atomic/agents/<id>/env` at startup. See
+> `docs/demo-agent/agent.py` for an example.
 
 ## Upgrading the OS
 
